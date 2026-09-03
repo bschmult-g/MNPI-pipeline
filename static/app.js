@@ -245,7 +245,7 @@
 
       const defaultOpt = document.createElement("option");
       defaultOpt.value = "";
-      defaultOpt.textContent = "-- Select file in gs://quarantine-holding-zone/ --";
+      defaultOpt.textContent = "-- Select file in " + (data.bucket || "gs://quarantine-holding-zone/incoming/") + " --";
       dom.bucketSelect.appendChild(defaultOpt);
 
       data.files.forEach(function (file) {
