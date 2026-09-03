@@ -174,19 +174,47 @@ def get_preset_scenarios():
 
 @app.get("/api/bucket/files")
 def list_quarantine_bucket_files():
-    """Lists files available in the simulated gs://quarantine-holding-zone/ bucket."""
+    """Lists files available in live GCS or the simulated quarantine bucket."""
+    gcs_bucket_name = os.getenv("GCS_QUARANTINE_BUCKET", "")
+    
+    # Check if a real GCS bucket is configured and accessible
+    if gcs_bucket_name:
+        try:
+            from google.cloud import storage
+            client = storage.Client()
+            bucket = client.bucket(gcs_bucket_name)
+            blobs = list(bucket.list_blobs(prefix="incoming/"))
+            live_files = [
+                {
+                    "filename": os.path.basename(b.name),
+                    "gcs_uri": f"gs://{gcs_bucket_name}/{b.name}",
+                    "size_bytes": b.size,
+                }
+                for b in blobs if not b.name.endswith("/") and os.path.basename(b.name)
+            ]
+            if live_files:
+                return {
+                    "bucket": f"gs://{gcs_bucket_name}/incoming/",
+                    "files": live_files,
+                    "mode": "live_gcs",
+                }
+        except Exception as e:
+            logger.info(f"Live GCS bucket lookup ({gcs_bucket_name}) fell back to local: {e}")
+
+    # Fallback to simulated local quarantine storage
     files = []
     if QUARANTINE_DIR.exists():
         for path in sorted(QUARANTINE_DIR.glob("*")):
-            if path.is_file():
+            if path.is_file() and not path.name.startswith("."):
                 files.append({
                     "filename": path.name,
-                    "gcs_uri": f"gs://quarantine-holding-zone/incoming/{path.name}",
+                    "gcs_uri": f"gs://{gcs_bucket_name or 'quarantine-holding-zone'}/incoming/{path.name}",
                     "size_bytes": path.stat().st_size,
                 })
     return {
-        "bucket": "gs://quarantine-holding-zone/incoming/",
+        "bucket": f"gs://{gcs_bucket_name or 'quarantine-holding-zone'}/incoming/",
         "files": files,
+        "mode": "simulated",
     }
 
 
@@ -197,10 +225,31 @@ def fetch_from_storage_bucket(req: FetchBucketRequest):
     if not uri.startswith("gs://"):
         raise HTTPException(status_code=400, detail="Invalid GCS URI. Must start with 'gs://'")
 
+    # 1. If it's a real GCS URI (not the default simulated 'quarantine-holding-zone'), try live GCS first
+    match = re.match(r"^gs://([^/]+)/(.+)$", uri)
+    if match:
+        bucket_name, blob_name = match.groups()
+        if bucket_name != "quarantine-holding-zone":
+            try:
+                from google.cloud import storage
+                client = storage.Client()
+                bucket = client.bucket(bucket_name)
+                blob = bucket.blob(blob_name)
+                if blob.exists():
+                    content = blob.download_as_text()
+                    return {
+                        "source": "live_gcs",
+                        "gcs_uri": uri,
+                        "filename": os.path.basename(blob_name),
+                        "content": content,
+                        "bytes": len(content.encode("utf-8")),
+                    }
+            except Exception as gcs_err:
+                logger.info(f"Live GCS fetch attempt for {uri} failed: {gcs_err}")
+
+    # 2. Check simulated local quarantine storage
     filename = os.path.basename(uri)
     sanitized = sanitize_filename(filename)
-
-    # 1. Attempt simulated local quarantine storage first
     local_target = QUARANTINE_DIR / sanitized
     if local_target.exists():
         try:
@@ -214,27 +263,6 @@ def fetch_from_storage_bucket(req: FetchBucketRequest):
             }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to read file from storage: {e}")
-
-    # 2. Attempt real Google Cloud Storage if credentials are configured
-    try:
-        from google.cloud import storage
-        client = storage.Client()
-        match = re.match(r"^gs://([^/]+)/(.+)$", uri)
-        if match:
-            bucket_name, blob_name = match.groups()
-            bucket = client.bucket(bucket_name)
-            blob = bucket.blob(blob_name)
-            if blob.exists():
-                content = blob.download_as_text()
-                return {
-                    "source": "live_gcs",
-                    "gcs_uri": uri,
-                    "filename": sanitized,
-                    "content": content,
-                    "bytes": len(content.encode("utf-8")),
-                }
-    except Exception as gcs_err:
-        logger.info(f"Live GCS lookup fell back: {gcs_err}")
 
     raise HTTPException(
         status_code=404,
