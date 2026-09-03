@@ -19,16 +19,9 @@ on:
         required: false
         default: ''
 
-env:
-  PROJECT_ID: 'green-carrier-500109-k2'
-  PROJECT_NUMBER: '799321431260'
-  DEFAULT_REGION: 'us-central1'
-  DISPLAY_NAME: 'mnpi-compliance-agent'
-  DESCRIPTION: 'Material Non-Public Information (MNPI) Compliance Decision Authority Agent'
-
 permissions:
   contents: read
-  id-token: write # Required for Google Cloud Workload Identity Federation (OIDC)
+  id-token: write
 
 jobs:
   test-and-deploy:
@@ -54,50 +47,37 @@ jobs:
         run: |
           python test_suite.py
 
-      # Primary Auth: Workload Identity Federation (Keyless, Google Recommended)
-      - name: Authenticate to Google Cloud (Workload Identity Federation)
-        if: ${{ secrets.GCP_SA_KEY == '' }}
+      - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          project_id: ${{ env.PROJECT_ID }}
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || format('projects/{0}/locations/global/workloadIdentityPools/{1}/providers/{2}', env.PROJECT_NUMBER, secrets.GCP_WIF_POOL || 'github-actions-pool', secrets.GCP_WIF_PROVIDER || 'github-actions-provider') }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || format('github-actions-deployer@{0}.iam.gserviceaccount.com', env.PROJECT_ID) }}
-
-      # Fallback Auth: Service Account JSON Key (if explicitly set in repository secrets)
-      - name: Authenticate to Google Cloud (Service Account Key Fallback)
-        if: ${{ secrets.GCP_SA_KEY != '' }}
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: ${{ env.PROJECT_ID }}
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: 'green-carrier-500109-k2'
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || 'projects/799321431260/locations/global/workloadIdentityPools/github-actions-pool/providers/github-actions-provider' }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || 'github-actions-deployer@green-carrier-500109-k2.iam.gserviceaccount.com' }}
 
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Verify Google Cloud Authentication
         run: |
-          gcloud config set project ${{ env.PROJECT_ID }}
+          gcloud config set project green-carrier-500109-k2
           echo "Authenticated active account:"
           gcloud auth list
           echo "Current project: $(gcloud config get-value project)"
 
       - name: Deploy Agent to Vertex AI Agent Runtime
         run: |
-          DEPLOY_REGION="${{ github.event.inputs.region || env.DEFAULT_REGION }}"
-          echo "Deploying MNPI Compliance Agent to Agent Runtime in project ${{ env.PROJECT_ID }} (Region: ${DEPLOY_REGION})..."
+          DEPLOY_REGION="${{ github.event.inputs.region || 'us-central1' }}"
+          echo "Deploying MNPI Compliance Agent to Agent Runtime in project green-carrier-500109-k2 (Region: ${DEPLOY_REGION})..."
 
-          DEPLOY_CMD="adk deploy agent_engine . \
-            --project=${{ env.PROJECT_ID }} \
-            --region=${DEPLOY_REGION} \
-            --display_name=\"${{ env.DISPLAY_NAME }}\" \
-            --description=\"${{ env.DESCRIPTION }}\" \
-            --otel_to_cloud"
-
-          TARGET_ENGINE_ID="${{ github.event.inputs.agent_engine_id || secrets.AGENT_ENGINE_ID }}"
-          if [ -n "${TARGET_ENGINE_ID}" ]; then
-            echo "Targeting existing Agent Engine / Runtime ID: ${TARGET_ENGINE_ID}"
-            DEPLOY_CMD="${DEPLOY_CMD} --agent_engine_id=${TARGET_ENGINE_ID}"
+          EXTRA_ARGS=()
+          if [ -n "${{ github.event.inputs.agent_engine_id }}" ]; then
+            EXTRA_ARGS+=(--agent_engine_id="${{ github.event.inputs.agent_engine_id }}")
           fi
 
-          echo "Running deployment command: ${DEPLOY_CMD}"
-          eval "${DEPLOY_CMD}"
+          adk deploy agent_engine . \
+            --project=green-carrier-500109-k2 \
+            --region="${DEPLOY_REGION}" \
+            --display_name="mnpi-compliance-agent" \
+            --description="Material Non-Public Information (MNPI) Compliance Decision Authority Agent" \
+            --otel_to_cloud \
+            "${EXTRA_ARGS[@]}"
