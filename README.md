@@ -142,10 +142,21 @@ python3 main.py --scenario benign
 python3 main.py --text "Project Titan is acquiring TechCo next week. Don't share."
 ```
 
-### 4. Interactive Mode
+### 4. Interactive CLI Mode
 ```bash
 python3 main.py --interactive
 ```
+
+### 5. Interactive Demo Dashboard (Ingestion Simulator)
+Simulates document ingestion (Zoom, Slack, Email, Salesforce), Quarantine Holding Zone (GCS), Two-Agent arbitration, and Approved Assets routing:
+```bash
+python3 demo_server.py
+```
+Open **`http://127.0.0.1:8080`** in your browser to test:
+- Drag-and-drop file uploads (`.txt`, `.json`, `.eml`, `.csv`, `.md`).
+- Fetching staged documents from `gs://quarantine-holding-zone/incoming/`.
+- Inspecting the Fact Checker evidence and Arbiter 4-Test scorecard.
+- Viewing real-time routing to **General Use** vs. **Scoped Use (Redacted)** with diff highlights.
 
 ---
 

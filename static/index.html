@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MNPI Compliance Pipeline - Ingestion & Redaction Simulator</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-badge">MNPI</div>
+      <div>
+        <h1>Material Non-Public Information Compliance Platform</h1>
+        <p class="subtitle">End-to-End Simulation: Ingestion Producers &rarr; Quarantine &rarr; Two-Agent Arbitration &rarr; Route & Redact</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="status-pill active">
+        <span class="status-dot"></span>
+        <span>Vertex AI Agent Runtime: <code>green-carrier-500109-k2</code></span>
+      </div>
+      <a href="https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/5693910574635679744/playground?project=799321431260" target="_blank" rel="noopener noreferrer" class="cloud-link-btn">
+        Open Vertex AI Console &#8599;
+      </a>
+    </div>
+  </header>
+
+  <main class="dashboard-grid">
+    <!-- COLUMN 1: INGESTION PRODUCERS & QUARANTINE -->
+    <section class="panel panel-ingestion">
+      <div class="panel-header">
+        <div class="step-indicator">1</div>
+        <h2>Ingestion Producers & Quarantine</h2>
+      </div>
+
+      <!-- INGESTION SOURCE TABS -->
+      <div class="tab-bar">
+        <button id="tab-presets" class="tab-btn active">Demo Presets</button>
+        <button id="tab-upload" class="tab-btn">Upload File</button>
+        <button id="tab-bucket" class="tab-btn">Storage Bucket (GCS)</button>
+      </div>
+
+      <!-- TAB CONTENT: PRESETS -->
+      <div id="section-presets" class="tab-content active">
+        <label class="field-label">Select Canonical Test Scenario:</label>
+        <div id="presets-list" class="preset-cards"></div>
+      </div>
+
+      <!-- TAB CONTENT: UPLOAD -->
+      <div id="section-upload" class="tab-content">
+        <label class="field-label">Upload Communication / Transcript:</label>
+        <div id="drop-zone" class="drop-zone">
+          <div class="drop-icon">&#128196;</div>
+          <p class="drop-text">Drag &amp; drop document or click to browse</p>
+          <p class="drop-hint">Supported: .txt, .json, .eml, .csv, .md, .log (Max 5MB)</p>
+          <input type="file" id="file-input" class="file-input-hidden" accept=".txt,.json,.eml,.csv,.md,.log,.transcript">
+        </div>
+        <div id="upload-status" class="upload-status-box hidden"></div>
+      </div>
+
+      <!-- TAB CONTENT: STORAGE BUCKET -->
+      <div id="section-bucket" class="tab-content">
+        <label class="field-label">Fetch from Cloud Storage Quarantine Bucket:</label>
+        <div class="bucket-browser">
+          <select id="bucket-select" class="form-select">
+            <option value="">-- Select file in gs://quarantine-holding-zone/ --</option>
+          </select>
+          <div class="input-with-btn">
+            <input type="text" id="gcs-uri-input" class="form-input" value="gs://quarantine-holding-zone/incoming/slack_channel_project_titan_deal.txt" placeholder="gs://bucket/path/to/file.txt">
+            <button id="btn-fetch-bucket" class="btn-secondary">Fetch</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- DOCUMENT PREVIEW & CHANNEL -->
+      <div class="document-preview-section">
+        <div class="preview-header">
+          <label class="field-label">Source Channel:</label>
+          <div class="channel-selector">
+            <button class="channel-chip active" data-channel="slack">&#128172; Slack</button>
+            <button class="channel-chip" data-channel="zoom">&#128249; Zoom</button>
+            <button class="channel-chip" data-channel="email">&#9993; Email</button>
+            <button class="channel-chip" data-channel="salesforce">&#9729; Salesforce</button>
+          </div>
+        </div>
+
+        <div class="quarantine-box">
+          <div class="quarantine-badge">&#128274; Staged in Quarantine Holding Zone (Cloud Storage)</div>
+          <textarea id="document-text" class="document-textarea" placeholder="Enter or paste text to evaluate for Material Non-Public Information..."></textarea>
+          <div class="char-count" id="char-count">0 characters</div>
+        </div>
+
+        <button id="btn-process" class="btn-primary">
+          <span class="btn-text">&#9881; Process with Two-Agent Platform</span>
+          <span id="process-spinner" class="spinner hidden"></span>
+        </button>
+      </div>
+    </section>
+
+    <!-- COLUMN 2: TWO-AGENT ARBITRATION PLATFORM -->
+    <section class="panel panel-agent">
+      <div class="panel-header">
+        <div class="step-indicator">2</div>
+        <h2>Two-Agent Compliance Platform</h2>
+      </div>
+
+      <!-- FACT CHECKER (AGENT 1) -->
+      <div class="card agent-card">
+        <div class="card-header">
+          <div class="agent-avatar">&#128269;</div>
+          <div>
+            <h3>Fact Checker Agent (Coordinator)</h3>
+            <span class="agent-role">Extracts facts &amp; verifies public records using 3 sub-agents as tools</span>
+          </div>
+        </div>
+
+        <div class="sub-agent-grid">
+          <!-- SA1: Entities -->
+          <div class="sub-agent-box" id="box-sa1">
+            <div class="sub-agent-title">&#127970; SA1: Entities</div>
+            <div id="sa1-chips" class="chip-container">
+              <span class="placeholder-text">Awaiting execution...</span>
+            </div>
+          </div>
+
+          <!-- SA2: Triggers -->
+          <div class="sub-agent-box" id="box-sa2">
+            <div class="sub-agent-title">&#9889; SA2: Triggers</div>
+            <div id="sa2-chips" class="chip-container">
+              <span class="placeholder-text">Awaiting execution...</span>
+            </div>
+          </div>
+
+          <!-- SA3: Public Check -->
+          <div class="sub-agent-box" id="box-sa3">
+            <div class="sub-agent-title">&#128270; SA3: Public Check</div>
+            <div id="sa3-info" class="sub-agent-content">
+              <span class="placeholder-text">Awaiting execution...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ARBITER (AGENT 2) -->
+      <div class="card agent-card">
+        <div class="card-header">
+          <div class="agent-avatar">&#9878;</div>
+          <div>
+            <h3>MPNI Agent Arbiter (Decision Authority)</h3>
+            <span class="agent-role">Applies 4 Judicial Criteria grounded in Federal Securities Law</span>
+          </div>
+        </div>
+
+        <div id="criteria-list" class="criteria-grid">
+          <!-- 1. Materiality -->
+          <div class="criterion-item" id="crit-mat">
+            <div class="crit-header">
+              <span class="crit-name">1. Materiality Test</span>
+              <span class="crit-status" id="status-mat">-</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="bar-mat" style="width: 0%"></div></div>
+            <p class="crit-rationale" id="rationale-mat">Awaiting analysis...</p>
+          </div>
+
+          <!-- 2. Public Availability -->
+          <div class="criterion-item" id="crit-pub">
+            <div class="crit-header">
+              <span class="crit-name">2. Public Availability (Mosaic)</span>
+              <span class="crit-status" id="status-pub">-</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="bar-pub" style="width: 0%"></div></div>
+            <p class="crit-rationale" id="rationale-pub">Awaiting analysis...</p>
+          </div>
+
+          <!-- 3. Source & Duty -->
+          <div class="criterion-item" id="crit-src">
+            <div class="crit-header">
+              <span class="crit-name">3. Source &amp; Duty Test</span>
+              <span class="crit-status" id="status-src">-</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="bar-src" style="width: 0%"></div></div>
+            <p class="crit-rationale" id="rationale-src">Awaiting analysis...</p>
+          </div>
+
+          <!-- 4. Actionability / Harm -->
+          <div class="criterion-item" id="crit-harm">
+            <div class="crit-header">
+              <span class="crit-name">4. Actionability / Harm Test</span>
+              <span class="crit-status" id="status-harm">-</span>
+            </div>
+            <div class="progress-track"><div class="progress-bar" id="bar-harm" style="width: 0%"></div></div>
+            <p class="crit-rationale" id="rationale-harm">Awaiting analysis...</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLUMN 3: ROUTING & REDACTION OUTPUT -->
+    <section class="panel panel-output">
+      <div class="panel-header">
+        <div class="step-indicator">3</div>
+        <h2>Approved Assets &amp; Routing</h2>
+      </div>
+
+      <!-- ROUTING DECISION BANNER -->
+      <div id="routing-banner" class="routing-banner neutral">
+        <div class="routing-icon" id="routing-icon">&#128274;</div>
+        <div>
+          <div class="routing-title" id="routing-destination">Awaiting Analysis</div>
+          <div class="routing-subtitle" id="routing-storage">Destination bucket will be assigned based on Arbiter verdict.</div>
+        </div>
+      </div>
+
+      <!-- REDACTION COMPARISON VIEW -->
+      <div class="card output-card">
+        <div class="card-header-tabs">
+          <h3>Document Output</h3>
+          <div class="view-tabs">
+            <button id="btn-view-redacted" class="sub-tab-btn active">Redacted Text</button>
+            <button id="btn-view-original" class="sub-tab-btn">Original Text</button>
+            <button id="btn-view-diff" class="sub-tab-btn">Side-by-Side Diff</button>
+          </div>
+        </div>
+
+        <div id="output-view-container" class="output-view-container">
+          <div id="output-text" class="output-text-area">Ready to process. Select a scenario or upload a document to begin.</div>
+        </div>
+      </div>
+
+      <!-- AUDIT LOG & COMPLIANCE JUSTIFICATION -->
+      <div class="card audit-card">
+        <div class="card-header">
+          <div class="agent-avatar">&#128221;</div>
+          <div>
+            <h3>Regulatory Audit Trail</h3>
+            <span class="agent-role">Defensible justification log for SEC / FINRA examinations</span>
+          </div>
+        </div>
+        <div class="audit-body" id="audit-justification">
+          Analysis log will be populated automatically when document is arbitrated.
+        </div>
+        <div class="audit-meta" id="audit-meta">
+          <span>Latency: <strong id="meta-latency">-</strong></span>
+          <span>Risk Level: <strong id="meta-risk">-</strong></span>
+          <span>Action: <strong id="meta-action">-</strong></span>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

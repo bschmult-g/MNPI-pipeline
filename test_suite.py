@@ -115,6 +115,79 @@ class TestMNPIComplianceSystem(unittest.TestCase):
         self.assertEqual(agent.app.name, "mnpi_compliance_agent")
 
 
+class TestDemoServer(unittest.TestCase):
+    """Integration tests for the ingestion simulator FastAPI server."""
+
+    @classmethod
+    def setUpClass(cls):
+        from fastapi.testclient import TestClient
+        from demo_server import app
+        cls.client = TestClient(app)
+
+    def test_serve_index_html(self):
+        """Validates that GET / serves the dashboard HTML."""
+        resp = self.client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("MNPI", resp.text)
+        self.assertIn("Ingestion Producers", resp.text)
+
+    def test_get_scenarios(self):
+        """Validates that GET /api/scenarios returns the 4 preloaded scenarios."""
+        resp = self.client.get("/api/scenarios")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertGreaterEqual(len(data), 4)
+        channels = [s["channel"] for s in data]
+        self.assertIn("slack", channels)
+        self.assertIn("zoom", channels)
+        self.assertIn("email", channels)
+        self.assertIn("salesforce", channels)
+
+    def test_bucket_files_listing_and_fetch(self):
+        """Validates simulated GCS bucket listing and fetching."""
+        resp = self.client.get("/api/bucket/files")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("bucket", data)
+        self.assertGreater(len(data["files"]), 0)
+
+        # Test fetching the first file
+        target_uri = data["files"][0]["gcs_uri"]
+        fetch_resp = self.client.post("/api/bucket/fetch", json={"gcs_uri": target_uri})
+        self.assertEqual(fetch_resp.status_code, 200)
+        fetch_data = fetch_resp.json()
+        self.assertIn("content", fetch_data)
+        self.assertGreater(len(fetch_data["content"]), 0)
+
+    def test_upload_document(self):
+        """Validates document upload into Quarantine Holding Zone."""
+        sample_bytes = b"[Zoom Transcript] Secret codename Project Titan test."
+        files = {"file": ("test_transcript.txt", sample_bytes, "text/plain")}
+        resp = self.client.post("/api/upload", files=files, data={"channel": "zoom"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "QUARANTINED")
+        self.assertIn("gs://quarantine-holding-zone/incoming/", data["quarantine_uri"])
+        self.assertEqual(data["text"], sample_bytes.decode())
+
+    def test_process_document_routing(self):
+        """Validates processing pipeline execution and routing assignment."""
+        leak_text = "Don't share, but Project Titan is acquiring TechCo for $2.4B next Tuesday."
+        resp = self.client.post("/api/process", json={
+            "text": leak_text,
+            "channel": "slack",
+            "document_title": "M&A Leak Test",
+        })
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "COMPLETED")
+        self.assertEqual(data["verdict"]["verdict"], "MNPI_CONFIRMED")
+        self.assertEqual(data["routing"]["badge_variant"], "critical")
+        self.assertIn("Scoped Use", data["routing"]["destination"])
+        self.assertTrue(data["redaction_diff"]["is_redacted"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
