@@ -69,9 +69,10 @@ jobs:
           DEPLOY_REGION="${{ github.event.inputs.region || 'us-central1' }}"
           echo "Deploying MNPI Compliance Agent to Agent Runtime in project green-carrier-500109-k2 (Region: ${DEPLOY_REGION})..."
 
+          TARGET_ENGINE_ID="${{ github.event.inputs.agent_engine_id || '5693910574635679744' }}"
           EXTRA_ARGS=()
-          if [ -n "${{ github.event.inputs.agent_engine_id }}" ]; then
-            EXTRA_ARGS+=(--agent_engine_id="${{ github.event.inputs.agent_engine_id }}")
+          if [ -n "${TARGET_ENGINE_ID}" ]; then
+            EXTRA_ARGS+=(--agent_engine_id="${TARGET_ENGINE_ID}")
           fi
 
           adk deploy agent_engine . \

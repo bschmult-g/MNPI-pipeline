@@ -1,6 +1,7 @@
 {
   "display_name": "mnpi-compliance-agent",
   "description": "Material Non-Public Information (MNPI) Compliance Decision Authority Agent",
+  "agent_engine_id": "5693910574635679744",
   "env_vars": {
     "MNPI_DEFAULT_MODEL": "gemini-2.5-flash",
     "MNPI_ARBITER_MODEL": "gemini-2.5-flash",

@@ -241,3 +241,8 @@ gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@gree
 ```
 
 Once configured, any push to `main` (or manual dispatch via the Actions tab) will run the test suite and deploy the latest agent code to Vertex AI Agent Runtime.
+
+### 3. Live Deployed Instance
+- **Resource Name**: `projects/799321431260/locations/us-central1/reasoningEngines/5693910574635679744`
+- **Agent Engine ID**: `5693910574635679744`
+- **Vertex AI Console Playground**: [Open in Google Cloud Console](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/5693910574635679744/playground?project=799321431260)
