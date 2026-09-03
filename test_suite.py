@@ -106,6 +106,15 @@ class TestMNPIComplianceSystem(unittest.TestCase):
         self.assertEqual(verdict.risk_level, "LOW")
         self.assertEqual(verdict.recommended_action, "APPROVE_RELEASE")
 
+    def test_agent_entrypoint_and_app_structure(self):
+        """Validates that agent.py exports root_agent and app compatible with ADK deployment."""
+        import agent
+        self.assertTrue(hasattr(agent, "root_agent"))
+        self.assertTrue(hasattr(agent, "app"))
+        self.assertEqual(agent.root_agent.name, "mnpi_compliance_workflow")
+        self.assertEqual(agent.app.name, "mnpi_compliance_agent")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

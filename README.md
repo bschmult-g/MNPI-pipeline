@@ -180,3 +180,64 @@ This template is designed to be easily customized with your organization's speci
 4. **Actionability / Harm Test**:
    - *Question*: Does exposing this chunk allow an unauthorized party to infer a confidential corporate strategy or financial outcome?
    - *Legal Standard*: Misappropriation theory and competitive harm.
+
+---
+
+## ☁️ Deployment to Vertex AI Agent Runtime
+
+This project is configured for automated deployment to **Vertex AI Agent Runtime** (Agent Engine / Reasoning Engine) using Google ADK and GitHub Actions:
+
+- **Target Google Cloud Project**: `green-carrier-500109-k2`
+- **Project Number**: `799321431260`
+- **Region**: `us-central1` (configurable)
+- **Workflow**: `.github/workflows/deploy.yml`
+
+### 1. Manual / Local Deployment via ADK CLI
+```bash
+adk deploy agent_engine . \
+  --project=green-carrier-500109-k2 \
+  --region=us-central1 \
+  --display_name="mnpi-compliance-agent" \
+  --otel_to_cloud
+```
+
+### 2. CI/CD via GitHub Actions (Workload Identity Federation)
+The GitHub Actions workflow uses keyless **Workload Identity Federation (WIF)** to authenticate directly to Google Cloud without storing long-lived service account JSON keys.
+
+To set up Workload Identity Federation in GCP:
+```bash
+# 1. Create a Workload Identity Pool
+gcloud iam workload-identity-pools create "github-actions-pool" \
+  --project="green-carrier-500109-k2" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# 2. Create the GitHub OIDC Provider in the pool
+gcloud iam workload-identity-pools providers create-oidc "github-actions-provider" \
+  --project="green-carrier-500109-k2" \
+  --location="global" \
+  --workload-identity-pool="github-actions-pool" \
+  --display-name="GitHub Actions Provider" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.actor=assertion.actor,attribute.repository=assertion.repository"
+
+# 3. Create a dedicated deployer Service Account
+gcloud iam service-accounts create "github-actions-deployer" \
+  --project="green-carrier-500109-k2" \
+  --display-name="GitHub Actions Deployer"
+
+# 4. Grant required IAM roles to the Service Account
+for ROLE in roles/aiplatform.admin roles/storage.admin roles/artifactregistry.admin roles/cloudbuild.builds.editor roles/iam.serviceAccountUser; do
+  gcloud projects add-iam-policy-binding "green-carrier-500109-k2" \
+    --member="serviceAccount:github-actions-deployer@green-carrier-500109-k2.iam.gserviceaccount.com" \
+    --role="${ROLE}"
+done
+
+# 5. Allow GitHub Actions to impersonate the Service Account
+gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@green-carrier-500109-k2.iam.gserviceaccount.com" \
+  --project="green-carrier-500109-k2" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/799321431260/locations/global/workloadIdentityPools/github-actions-pool/attribute.repository/bschmult-g/MNPI-pipeline"
+```
+
+Once configured, any push to `main` (or manual dispatch via the Actions tab) will run the test suite and deploy the latest agent code to Vertex AI Agent Runtime.

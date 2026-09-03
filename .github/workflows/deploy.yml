@@ -1,0 +1,103 @@
+name: Deploy MNPI Compliance Agent to Vertex AI Agent Runtime
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'assets/**'
+      - '.gitignore'
+  workflow_dispatch:
+    inputs:
+      region:
+        description: 'Google Cloud region for Agent Runtime deployment'
+        required: false
+        default: 'us-central1'
+      agent_engine_id:
+        description: 'Existing Agent Engine / Runtime ID to update (leave blank to create a new instance)'
+        required: false
+        default: ''
+
+env:
+  PROJECT_ID: 'green-carrier-500109-k2'
+  PROJECT_NUMBER: '799321431260'
+  DEFAULT_REGION: 'us-central1'
+  DISPLAY_NAME: 'mnpi-compliance-agent'
+  DESCRIPTION: 'Material Non-Public Information (MNPI) Compliance Decision Authority Agent'
+
+permissions:
+  contents: read
+  id-token: write # Required for Google Cloud Workload Identity Federation (OIDC)
+
+jobs:
+  test-and-deploy:
+    name: Test & Deploy to Agent Runtime
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Compliance Pipeline Test Suite
+        run: |
+          python test_suite.py
+
+      # Primary Auth: Workload Identity Federation (Keyless, Google Recommended)
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        if: ${{ secrets.GCP_SA_KEY == '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER || format('projects/{0}/locations/global/workloadIdentityPools/{1}/providers/{2}', env.PROJECT_NUMBER, secrets.GCP_WIF_POOL || 'github-actions-pool', secrets.GCP_WIF_PROVIDER || 'github-actions-provider') }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT || format('github-actions-deployer@{0}.iam.gserviceaccount.com', env.PROJECT_ID) }}
+
+      # Fallback Auth: Service Account JSON Key (if explicitly set in repository secrets)
+      - name: Authenticate to Google Cloud (Service Account Key Fallback)
+        if: ${{ secrets.GCP_SA_KEY != '' }}
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Google Cloud Authentication
+        run: |
+          gcloud config set project ${{ env.PROJECT_ID }}
+          echo "Authenticated active account:"
+          gcloud auth list
+          echo "Current project: $(gcloud config get-value project)"
+
+      - name: Deploy Agent to Vertex AI Agent Runtime
+        run: |
+          DEPLOY_REGION="${{ github.event.inputs.region || env.DEFAULT_REGION }}"
+          echo "Deploying MNPI Compliance Agent to Agent Runtime in project ${{ env.PROJECT_ID }} (Region: ${DEPLOY_REGION})..."
+
+          DEPLOY_CMD="adk deploy agent_engine . \
+            --project=${{ env.PROJECT_ID }} \
+            --region=${DEPLOY_REGION} \
+            --display_name=\"${{ env.DISPLAY_NAME }}\" \
+            --description=\"${{ env.DESCRIPTION }}\" \
+            --otel_to_cloud"
+
+          TARGET_ENGINE_ID="${{ github.event.inputs.agent_engine_id || secrets.AGENT_ENGINE_ID }}"
+          if [ -n "${TARGET_ENGINE_ID}" ]; then
+            echo "Targeting existing Agent Engine / Runtime ID: ${TARGET_ENGINE_ID}"
+            DEPLOY_CMD="${DEPLOY_CMD} --agent_engine_id=${TARGET_ENGINE_ID}"
+          fi
+
+          echo "Running deployment command: ${DEPLOY_CMD}"
+          eval "${DEPLOY_CMD}"

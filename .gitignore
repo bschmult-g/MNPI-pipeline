@@ -23,3 +23,7 @@ ENV/
 # Testing & logs
 .pytest_cache/
 *.log
+
+# Google ADK local cache & deployment staging
+.adk/
+*_tmp*

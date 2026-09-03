@@ -1,0 +1,10 @@
+{
+  "display_name": "mnpi-compliance-agent",
+  "description": "Material Non-Public Information (MNPI) Compliance Decision Authority Agent",
+  "env_vars": {
+    "MNPI_DEFAULT_MODEL": "gemini-2.5-flash",
+    "MNPI_ARBITER_MODEL": "gemini-2.5-flash",
+    "GOOGLE_CLOUD_PROJECT": "green-carrier-500109-k2",
+    "GOOGLE_CLOUD_LOCATION": "us-central1"
+  }
+}
