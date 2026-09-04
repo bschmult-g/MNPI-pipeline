@@ -109,6 +109,30 @@
     modalDocTitle: document.getElementById("modal-doc-title"),
     modalDocBody: document.getElementById("modal-doc-body"),
     btnCloseModal: document.getElementById("btn-close-modal"),
+
+    // Primary View Navigation
+    navBtnPipeline: document.getElementById("nav-btn-pipeline"),
+    navBtnBigQuery: document.getElementById("nav-btn-bigquery"),
+    navBqBadge: document.getElementById("nav-bq-badge"),
+    viewPipeline: document.getElementById("view-pipeline"),
+    viewBigQuery: document.getElementById("view-bigquery"),
+
+    // BigQuery Explorer Controls & Panes
+    btnRefreshBqExplorer: document.getElementById("btn-refresh-bq-explorer"),
+    btnExportCsv: document.getElementById("btn-export-csv"),
+    metricTotalRows: document.getElementById("metric-total-rows"),
+    bqTabData: document.getElementById("bq-tab-data"),
+    bqTabSchema: document.getElementById("bq-tab-schema"),
+    bqTabSql: document.getElementById("bq-tab-sql"),
+    bqPaneData: document.getElementById("bq-pane-data"),
+    bqPaneSchema: document.getElementById("bq-pane-schema"),
+    bqPaneSql: document.getElementById("bq-pane-sql"),
+    bqSearchInput: document.getElementById("bq-search-input"),
+    bqVerdictFilter: document.getElementById("bq-verdict-filter"),
+    bqExplorerTableBody: document.getElementById("bq-explorer-table-body"),
+    bqSchemaTbody: document.getElementById("bq-schema-tbody"),
+    btnCopySql: document.getElementById("btn-copy-sql"),
+    bqSqlBlock: document.getElementById("bq-sql-block"),
   };
 
   // ============================================================================
@@ -838,15 +862,21 @@
   // BigQuery Document Alignment Audit Table Logic
   // ============================================================================
 
+  // ============================================================================
+  // BigQuery Document Alignment Audit & Explorer Logic
+  // ============================================================================
+
   async function loadAuditLogs() {
     try {
       // 1. Fetch BigQuery status
       const statusRes = await fetch("/api/audit/status");
       if (statusRes.ok) {
         const statusData = await statusRes.json();
-        if (dom.bqStatusText) {
-          dom.bqStatusText.textContent = `BigQuery: ${statusData.connected ? "Connected" : "Local Mirror"} (${statusData.total_records} records)`;
-        }
+        const total = statusData.total_records || 0;
+        const statusText = `BigQuery: ${statusData.connected ? "Connected" : "Local Mirror"} (${total} records)`;
+        if (dom.bqStatusText) dom.bqStatusText.textContent = statusText;
+        if (dom.metricTotalRows) dom.metricTotalRows.textContent = `${total} rows`;
+        if (dom.navBqBadge) dom.navBqBadge.textContent = `${total} records`;
       }
 
       // 2. Fetch BigQuery logs
@@ -858,23 +888,82 @@
       }
     } catch (err) {
       console.warn("Failed to load BigQuery audit logs:", err);
-      if (dom.auditTableBody) {
-        clearElement(dom.auditTableBody);
-        const tr = document.createElement("tr");
-        const td = createTextElement("td", "Unable to load audit logs from BigQuery.", "audit-table-loading");
-        td.colSpan = 9;
-        tr.appendChild(td);
-        dom.auditTableBody.appendChild(tr);
-      }
+      showTableError(dom.auditTableBody);
+      showTableError(dom.bqExplorerTableBody);
     }
   }
 
-  function renderAuditTable() {
-    if (!dom.auditTableBody) return;
-    clearElement(dom.auditTableBody);
+  async function loadAuditSchema() {
+    if (!dom.bqSchemaTbody) return;
+    try {
+      const res = await fetch("/api/audit/schema");
+      if (!res.ok) throw new Error("Schema request failed");
+      const data = await res.json();
+      clearElement(dom.bqSchemaTbody);
 
-    const query = (dom.auditSearchInput ? dom.auditSearchInput.value : "").trim().toLowerCase();
-    const verdictFilter = dom.auditVerdictFilter ? dom.auditVerdictFilter.value : "ALL";
+      const fields = data.fields || [];
+      if (fields.length === 0) {
+        const tr = document.createElement("tr");
+        const td = createTextElement("td", "No schema fields found.", "audit-table-loading");
+        td.colSpan = 4;
+        tr.appendChild(td);
+        dom.bqSchemaTbody.appendChild(tr);
+        return;
+      }
+
+      fields.forEach(function (f) {
+        const tr = document.createElement("tr");
+        const tdName = createTextElement("td", f.name, "schema-field-name");
+        
+        const tdType = document.createElement("td");
+        tdType.appendChild(createTextElement("span", f.field_type, "schema-type-badge"));
+        
+        const tdMode = createTextElement("td", f.mode);
+        tdMode.style.fontFamily = "var(--font-mono)";
+        tdMode.style.fontSize = "0.75rem";
+        tdMode.style.color = "var(--text-muted)";
+
+        const tdDesc = createTextElement("td", f.description || "-");
+        tdDesc.style.color = "var(--text-secondary)";
+
+        tr.appendChild(tdName);
+        tr.appendChild(tdType);
+        tr.appendChild(tdMode);
+        tr.appendChild(tdDesc);
+        dom.bqSchemaTbody.appendChild(tr);
+      });
+    } catch (err) {
+      console.warn("Failed to load schema:", err);
+      clearElement(dom.bqSchemaTbody);
+      const tr = document.createElement("tr");
+      const td = createTextElement("td", "Unable to load table schema definition.", "audit-table-loading");
+      td.colSpan = 4;
+      tr.appendChild(td);
+      dom.bqSchemaTbody.appendChild(tr);
+    }
+  }
+
+  function showTableError(tableBody) {
+    if (!tableBody) return;
+    clearElement(tableBody);
+    const tr = document.createElement("tr");
+    const td = createTextElement("td", "Unable to load audit logs from BigQuery.", "audit-table-loading");
+    td.colSpan = 9;
+    tr.appendChild(td);
+    tableBody.appendChild(tr);
+  }
+
+  function renderAuditTable() {
+    renderSingleAuditTable(dom.auditTableBody, dom.auditSearchInput, dom.auditVerdictFilter);
+    renderSingleAuditTable(dom.bqExplorerTableBody, dom.bqSearchInput, dom.bqVerdictFilter);
+  }
+
+  function renderSingleAuditTable(tableBody, searchInput, verdictSelect) {
+    if (!tableBody) return;
+    clearElement(tableBody);
+
+    const query = (searchInput ? searchInput.value : "").trim().toLowerCase();
+    const verdictFilter = verdictSelect ? verdictSelect.value : "ALL";
 
     const filtered = state.auditRecords.filter(function (rec) {
       if (verdictFilter !== "ALL" && rec.verdict !== verdictFilter) {
@@ -904,7 +993,7 @@
       const td = createTextElement("td", "No matching document alignment records found in BigQuery.", "audit-table-loading");
       td.colSpan = 9;
       tr.appendChild(td);
-      dom.auditTableBody.appendChild(tr);
+      tableBody.appendChild(tr);
       return;
     }
 
@@ -1044,7 +1133,7 @@
       tdInspect.appendChild(btnInspect);
       tr.appendChild(tdInspect);
 
-      dom.auditTableBody.appendChild(tr);
+      tableBody.appendChild(tr);
     });
   }
 
@@ -1125,21 +1214,158 @@
     }
   }
 
-  // Audit event bindings
-  if (dom.btnRefreshAudit) {
-    dom.btnRefreshAudit.addEventListener("click", function () {
-      loadAuditLogs();
+  function exportLogsToCsv() {
+    if (!state.auditRecords || state.auditRecords.length === 0) {
+      alert("No BigQuery audit records to export.");
+      return;
+    }
+
+    const headers = [
+      "timestamp",
+      "document_name",
+      "channel",
+      "verdict",
+      "risk_level",
+      "recommended_action",
+      "materiality_score",
+      "public_availability_score",
+      "source_duty_score",
+      "harm_score",
+      "latency_ms",
+      "audit_hash",
+      "summary_justification",
+    ];
+
+    const csvRows = [headers.join(",")];
+
+    state.auditRecords.forEach(function (rec) {
+      const values = headers.map(function (h) {
+        let val = rec[h] === undefined || rec[h] === null ? "" : String(rec[h]);
+        val = val.replace(/"/g, '""');
+        return `"${val}"`;
+      });
+      csvRows.push(values.join(","));
     });
+
+    const blob = new Blob([csvRows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `mnpi_bigquery_alignment_audit_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
+  // ============================================================================
+  // Navigation & Sub-Tabs Event Bindings
+  // ============================================================================
+
+  // Primary View Navigation (Pipeline vs. BigQuery Explorer)
+  if (dom.navBtnPipeline) {
+    dom.navBtnPipeline.addEventListener("click", function () {
+      dom.navBtnPipeline.classList.add("active");
+      dom.navBtnBigQuery.classList.remove("active");
+      dom.viewPipeline.classList.remove("hidden");
+      dom.viewBigQuery.classList.add("hidden");
+    });
+  }
+
+  if (dom.navBtnBigQuery) {
+    dom.navBtnBigQuery.addEventListener("click", function () {
+      dom.navBtnBigQuery.classList.add("active");
+      dom.navBtnPipeline.classList.remove("active");
+      dom.viewBigQuery.classList.remove("hidden");
+      dom.viewPipeline.classList.add("hidden");
+      loadAuditLogs();
+      loadAuditSchema();
+    });
+  }
+
+  // BigQuery Explorer Sub-Tabs (Data, Schema, SQL)
+  function switchBqTab(activeBtn, activePane) {
+    [dom.bqTabData, dom.bqTabSchema, dom.bqTabSql].forEach(function (btn) {
+      if (btn) btn.classList.remove("active");
+    });
+    [dom.bqPaneData, dom.bqPaneSchema, dom.bqPaneSql].forEach(function (pane) {
+      if (pane) pane.classList.remove("active");
+    });
+    if (activeBtn) activeBtn.classList.add("active");
+    if (activePane) activePane.classList.add("active");
+  }
+
+  if (dom.bqTabData) {
+    dom.bqTabData.addEventListener("click", function () {
+      switchBqTab(dom.bqTabData, dom.bqPaneData);
+    });
+  }
+
+  if (dom.bqTabSchema) {
+    dom.bqTabSchema.addEventListener("click", function () {
+      switchBqTab(dom.bqTabSchema, dom.bqPaneSchema);
+      loadAuditSchema();
+    });
+  }
+
+  if (dom.bqTabSql) {
+    dom.bqTabSql.addEventListener("click", function () {
+      switchBqTab(dom.bqTabSql, dom.bqPaneSql);
+    });
+  }
+
+  // Copy SQL Button
+  if (dom.btnCopySql) {
+    dom.btnCopySql.addEventListener("click", function () {
+      const sqlText = dom.bqSqlBlock ? dom.bqSqlBlock.textContent : "";
+      navigator.clipboard.writeText(sqlText).then(function () {
+        alert("Copied BigQuery SQL query to clipboard!");
+      });
+    });
+  }
+
+  // Export CSV
+  if (dom.btnExportCsv) {
+    dom.btnExportCsv.addEventListener("click", exportLogsToCsv);
+  }
+
+  // Refresh in BigQuery Explorer
+  if (dom.btnRefreshBqExplorer) {
+    dom.btnRefreshBqExplorer.addEventListener("click", function () {
+      loadAuditLogs();
+      loadAuditSchema();
+    });
+  }
+
+  // Search & Filter event bindings
+  if (dom.btnRefreshAudit) {
+    dom.btnRefreshAudit.addEventListener("click", loadAuditLogs);
   }
 
   if (dom.auditSearchInput) {
     dom.auditSearchInput.addEventListener("input", function () {
+      if (dom.bqSearchInput) dom.bqSearchInput.value = dom.auditSearchInput.value;
+      renderAuditTable();
+    });
+  }
+
+  if (dom.bqSearchInput) {
+    dom.bqSearchInput.addEventListener("input", function () {
+      if (dom.auditSearchInput) dom.auditSearchInput.value = dom.bqSearchInput.value;
       renderAuditTable();
     });
   }
 
   if (dom.auditVerdictFilter) {
     dom.auditVerdictFilter.addEventListener("change", function () {
+      if (dom.bqVerdictFilter) dom.bqVerdictFilter.value = dom.auditVerdictFilter.value;
+      renderAuditTable();
+    });
+  }
+
+  if (dom.bqVerdictFilter) {
+    dom.bqVerdictFilter.addEventListener("change", function () {
+      if (dom.auditVerdictFilter) dom.auditVerdictFilter.value = dom.bqVerdictFilter.value;
       renderAuditTable();
     });
   }
@@ -1160,4 +1386,5 @@
   loadPresetScenarios();
   loadBucketFileList();
   loadAuditLogs();
+  loadAuditSchema();
 })();

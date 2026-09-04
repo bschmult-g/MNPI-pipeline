@@ -27,10 +27,28 @@
       <a href="https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/5693910574635679744/playground?project=799321431260" target="_blank" rel="noopener noreferrer" class="cloud-link-btn">
         Open Vertex AI Console &#8599;
       </a>
+      <a href="https://console.cloud.google.com/bigquery?project=green-carrier-500109-k2&ws=!1m5!1m4!4m3!1sgreen-carrier-500109-k2!2smnpi_compliance_audit!3sdocument_alignment_log" target="_blank" rel="noopener noreferrer" class="cloud-link-btn bq-link-btn">
+        Open BigQuery Console &#8599;
+      </a>
     </div>
   </header>
 
-  <main class="dashboard-grid">
+  <!-- TOP PRIMARY NAVIGATION -->
+  <nav class="main-nav-bar">
+    <button id="nav-btn-pipeline" class="main-nav-btn active">
+      <span class="nav-icon">&#9881;</span>
+      <span>Ingestion &amp; Arbitration Pipeline</span>
+    </button>
+    <button id="nav-btn-bigquery" class="main-nav-btn">
+      <span class="nav-icon">&#128202;</span>
+      <span>BigQuery Table Explorer</span>
+      <span id="nav-bq-badge" class="nav-badge">Live BQ Table</span>
+    </button>
+  </nav>
+
+  <!-- VIEW 1: INGESTION & ARBITRATION PIPELINE -->
+  <div id="view-pipeline" class="app-view">
+    <main class="dashboard-grid">
     <!-- COLUMN 1: INGESTION PRODUCERS & QUARANTINE -->
     <section class="panel panel-ingestion">
       <div class="panel-header">
@@ -344,6 +362,159 @@
       </table>
     </div>
   </section>
+  </div><!-- /view-pipeline -->
+
+  <!-- VIEW 2: DEDICATED BIGQUERY TABLE EXPLORER -->
+  <div id="view-bigquery" class="app-view hidden">
+    <div class="bq-explorer-container">
+      <!-- BigQuery Overview Header Card -->
+      <div class="bq-overview-card">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+          <div class="logo-badge" style="background: linear-gradient(135deg, #1e40af, #3b82f6); font-size: 1.4rem;">BQ</div>
+          <div>
+            <h2 style="font-size: 1.15rem; color: #f8fafc; margin-bottom: 0.25rem;">
+              green-carrier-500109-k2.mnpi_compliance_audit.document_alignment_log
+            </h2>
+            <p class="subtitle" style="margin: 0;">
+              Google Cloud BigQuery Native Table &bull; Location: <code>US Multi-Region</code> &bull; Streaming Partitioned Audit Trail
+            </p>
+          </div>
+        </div>
+
+        <div class="bq-action-btn-group">
+          <button id="btn-refresh-bq-explorer" class="btn-secondary btn-sm">&#8635; Refresh Table</button>
+          <button id="btn-export-csv" class="btn-secondary btn-sm">&#128190; Export CSV</button>
+          <a href="https://console.cloud.google.com/bigquery?project=green-carrier-500109-k2&ws=!1m5!1m4!4m3!1sgreen-carrier-500109-k2!2smnpi_compliance_audit!3sdocument_alignment_log" target="_blank" rel="noopener noreferrer" class="cloud-link-btn bq-link-btn">
+            Open in BigQuery Console &#8599;
+          </a>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+        <div class="card" style="padding: 1rem;">
+          <div class="bq-meta-label">Total Logged Records</div>
+          <div id="metric-total-rows" class="bq-meta-val" style="font-size: 1.5rem; color: #38bdf8; margin-top: 0.25rem;">3 rows</div>
+        </div>
+        <div class="card" style="padding: 1rem;">
+          <div class="bq-meta-label">Target Dataset</div>
+          <div class="bq-meta-val" style="font-size: 1.1rem; color: #a855f7; margin-top: 0.25rem;">mnpi_compliance_audit</div>
+        </div>
+        <div class="card" style="padding: 1rem;">
+          <div class="bq-meta-label">Storage Region</div>
+          <div class="bq-meta-val" style="font-size: 1.1rem; color: #34d399; margin-top: 0.25rem;">US (Multi-Region)</div>
+        </div>
+        <div class="card" style="padding: 1rem;">
+          <div class="bq-meta-label">Audit Tamper Detection</div>
+          <div class="bq-meta-val" style="font-size: 1.1rem; color: #fbbf24; margin-top: 0.25rem;">SHA-256 Verified</div>
+        </div>
+      </div>
+
+      <!-- Sub-Tabs Bar: Data Rows / Schema / SQL Query -->
+      <div class="bq-tabs-bar">
+        <button id="bq-tab-data" class="bq-tab-btn active">&#128203; Data Records (Rows)</button>
+        <button id="bq-tab-schema" class="bq-tab-btn">&#128208; Table Schema &amp; Types</button>
+        <button id="bq-tab-sql" class="bq-tab-btn">&#9889; BigQuery SQL Query</button>
+      </div>
+
+      <!-- PANE 1: DATA ROWS -->
+      <div id="bq-pane-data" class="bq-tab-pane active">
+        <div class="audit-toolbar">
+          <div class="audit-search-box">
+            <input type="text" id="bq-search-input" class="form-input" placeholder="Search BigQuery rows by document, catalyst, or hash...">
+          </div>
+          <div class="audit-filter-group">
+            <label class="field-label" style="margin: 0; align-self: center;">Verdict:</label>
+            <select id="bq-verdict-filter" class="form-select">
+              <option value="ALL">All Verdicts</option>
+              <option value="MNPI_CONFIRMED">MNPI_CONFIRMED (Critical)</option>
+              <option value="POTENTIAL_MNPI">POTENTIAL_MNPI (High)</option>
+              <option value="CLEARED">CLEARED / PUBLIC (Low)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="audit-table-wrapper">
+          <table class="audit-table" id="bq-explorer-table">
+            <thead>
+              <tr>
+                <th>Timestamp (UTC)</th>
+                <th>Document Name</th>
+                <th>Channel</th>
+                <th>Arbiter Verdict</th>
+                <th>Action</th>
+                <th>4 Assessment Scores</th>
+                <th>Latency</th>
+                <th>Audit Hash</th>
+                <th>Inspect</th>
+              </tr>
+            </thead>
+            <tbody id="bq-explorer-table-body">
+              <tr>
+                <td colspan="9" class="audit-table-loading">Loading BigQuery records...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PANE 2: TABLE SCHEMA -->
+      <div id="bq-pane-schema" class="bq-tab-pane">
+        <div class="schema-table-wrapper">
+          <table class="schema-table">
+            <thead>
+              <tr>
+                <th>Field Name</th>
+                <th>Type</th>
+                <th>Mode</th>
+                <th>Regulatory &amp; Compliance Purpose</th>
+              </tr>
+            </thead>
+            <tbody id="bq-schema-tbody">
+              <tr>
+                <td colspan="4" class="audit-table-loading">Loading schema from BigQuery...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PANE 3: SQL QUERY -->
+      <div id="bq-pane-sql" class="bq-tab-pane">
+        <div class="sql-container">
+          <div class="sql-header">
+            <div>
+              <strong style="color: #38bdf8;">Standard SQL Query</strong>
+              <span style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.5rem;">Executed via BigQuery Client API in Google Cloud</span>
+            </div>
+            <button id="btn-copy-sql" class="btn-secondary btn-sm">&#128203; Copy SQL</button>
+          </div>
+          <pre class="sql-code-block" id="bq-sql-block">SELECT
+    timestamp,
+    document_name,
+    channel,
+    verdict,
+    risk_level,
+    recommended_action,
+    materiality_score,
+    public_availability_score,
+    source_duty_score,
+    harm_score,
+    entities_detected,
+    triggers_detected,
+    has_secrecy_markers,
+    audit_hash,
+    summary_justification,
+    redacted_preview,
+    latency_ms,
+    model_used
+FROM `green-carrier-500109-k2.mnpi_compliance_audit.document_alignment_log`
+ORDER BY timestamp DESC
+LIMIT 50;</pre>
+        </div>
+      </div>
+    </div>
+  </div><!-- /view-bigquery -->
 
   <!-- AUDIT DETAIL MODAL -->
   <div id="audit-modal" class="modal-overlay hidden">

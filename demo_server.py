@@ -556,6 +556,58 @@ def get_audit_status():
     }
 
 
+@app.get("/api/audit/schema")
+def get_audit_schema():
+    """Returns the schema field definitions of the BigQuery document alignment table."""
+    client = get_bigquery_client()
+    table_id = get_table_full_id(project=client.project if client else None)
+    fields = []
+    if client:
+        try:
+            table = client.get_table(table_id)
+            for f in table.schema:
+                fields.append({
+                    "name": f.name,
+                    "field_type": f.field_type,
+                    "mode": f.mode,
+                    "description": f.description or "",
+                })
+        except Exception as e:
+            logger.debug(f"BigQuery get_table schema error: {e}")
+
+    # Fallback schema metadata if offline
+    if not fields:
+        fields = [
+            {"name": "timestamp", "field_type": "TIMESTAMP", "mode": "REQUIRED", "description": "UTC recording timestamp"},
+            {"name": "document_name", "field_type": "STRING", "mode": "REQUIRED", "description": "Ingested document identifier or filename"},
+            {"name": "channel", "field_type": "STRING", "mode": "NULLABLE", "description": "Ingestion producer channel (gcs, slack, zoom, email)"},
+            {"name": "verdict", "field_type": "STRING", "mode": "REQUIRED", "description": "Arbiter compliance decision (MNPI_CONFIRMED, POTENTIAL_MNPI, CLEARED)"},
+            {"name": "risk_level", "field_type": "STRING", "mode": "REQUIRED", "description": "Risk categorization (CRITICAL, HIGH, LOW)"},
+            {"name": "recommended_action", "field_type": "STRING", "mode": "REQUIRED", "description": "Enforced compliance routing action"},
+            {"name": "materiality_score", "field_type": "FLOAT", "mode": "NULLABLE", "description": "Test 1: Materiality score (0.0 - 1.0)"},
+            {"name": "public_availability_score", "field_type": "FLOAT", "mode": "NULLABLE", "description": "Test 2: Public Availability / Mosaic score (0.0 - 1.0)"},
+            {"name": "source_duty_score", "field_type": "FLOAT", "mode": "NULLABLE", "description": "Test 3: Source & Duty insider fiduciary breach score (0.0 - 1.0)"},
+            {"name": "harm_score", "field_type": "FLOAT", "mode": "NULLABLE", "description": "Test 4: Actionability and commercial harm potential (0.0 - 1.0)"},
+            {"name": "entities_detected", "field_type": "STRING", "mode": "NULLABLE", "description": "Detected corporate entities, tickers, and internal codenames"},
+            {"name": "triggers_detected", "field_type": "STRING", "mode": "NULLABLE", "description": "Detected M&A, roadmap, or financial trigger terms"},
+            {"name": "has_secrecy_markers", "field_type": "BOOLEAN", "mode": "NULLABLE", "description": "Whether explicit confidentiality markers were identified"},
+            {"name": "audit_hash", "field_type": "STRING", "mode": "NULLABLE", "description": "Cryptographic SHA-256 integrity hash digest"},
+            {"name": "summary_justification", "field_type": "STRING", "mode": "NULLABLE", "description": "Binding legal compliance justification for regulatory defense"},
+            {"name": "redacted_preview", "field_type": "STRING", "mode": "NULLABLE", "description": "Preview of sanitized document"},
+            {"name": "latency_ms", "field_type": "FLOAT", "mode": "NULLABLE", "description": "End-to-end multi-agent pipeline latency in milliseconds"},
+            {"name": "model_used", "field_type": "STRING", "mode": "NULLABLE", "description": "Reasoning model utilized (gemini-3.8-flash)"},
+        ]
+
+    return {
+        "table_id": table_id,
+        "project": client.project if client else settings.project_id,
+        "dataset": os.getenv("BIGQUERY_DATASET", "mnpi_compliance_audit"),
+        "table": os.getenv("BIGQUERY_TABLE", "document_alignment_log"),
+        "fields": fields,
+        "count": len(fields),
+    }
+
+
 # ==============================================================================
 # Static File Mounts & Root Page
 # ==============================================================================
