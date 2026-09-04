@@ -589,6 +589,9 @@
     // Set loading UI
     dom.btnProcess.disabled = true;
     dom.processSpinner.classList.remove("hidden");
+    const btnTextSpan = dom.btnProcess.querySelector(".btn-text");
+    const originalBtnText = btnTextSpan ? btnTextSpan.textContent : "⚙ Process with Two-Agent Platform";
+    if (btnTextSpan) btnTextSpan.textContent = "Arbitrating with Gemini 3.8 Flash (Vertex AI)...";
 
     try {
       const res = await fetch("/api/process", {
@@ -617,6 +620,7 @@
     } finally {
       dom.btnProcess.disabled = false;
       dom.processSpinner.classList.add("hidden");
+      if (btnTextSpan) btnTextSpan.textContent = originalBtnText;
     }
   });
 

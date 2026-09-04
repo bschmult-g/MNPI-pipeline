@@ -18,13 +18,29 @@ class AgentSettings(BaseModel):
 
     # Default model
     default_model: str = Field(
-        default=os.getenv("MNPI_DEFAULT_MODEL", "gemini-2.5-flash"),
+        default=os.getenv("MNPI_DEFAULT_MODEL", "gemini-3.8-flash"),
         description="Gemini model identifier for ADK agents"
     )
 
     arbiter_model: str = Field(
-        default=os.getenv("MNPI_ARBITER_MODEL", "gemini-2.5-flash"),
-        description="Model identifier for Arbiter (can use a higher reasoning model like pro)"
+        default=os.getenv("MNPI_ARBITER_MODEL", "gemini-3.8-flash"),
+        description="Model identifier for Arbiter"
+    )
+
+    # Cloud project & region settings
+    location: str = Field(
+        default=os.getenv("GOOGLE_CLOUD_LOCATION", "us"),
+        description="Vertex AI region"
+    )
+
+    project_id: str = Field(
+        default=os.getenv("GOOGLE_CLOUD_PROJECT", "green-carrier-500109-k2"),
+        description="Google Cloud Project ID"
+    )
+
+    api_endpoint: str = Field(
+        default="https://us-aiplatform.googleapis.com",
+        description="Regional API endpoint for US multi-region"
     )
 
     # Known internal project codenames (users can customize/extend this)

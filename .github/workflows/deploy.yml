@@ -13,7 +13,7 @@ on:
       region:
         description: 'Google Cloud region for Agent Runtime deployment'
         required: false
-        default: 'us-central1'
+        default: 'us'
       agent_engine_id:
         description: 'Existing Agent Engine / Runtime ID to update (leave blank to create a new instance)'
         required: false
@@ -66,19 +66,19 @@ jobs:
 
       - name: Deploy Agent to Vertex AI Agent Runtime
         run: |
-          DEPLOY_REGION="${{ github.event.inputs.region || 'us-central1' }}"
+          DEPLOY_REGION="${{ github.event.inputs.region || 'us' }}"
           echo "Deploying MNPI Compliance Agent to Agent Runtime in project green-carrier-500109-k2 (Region: ${DEPLOY_REGION})..."
 
-          TARGET_ENGINE_ID="${{ github.event.inputs.agent_engine_id || '5693910574635679744' }}"
-          EXTRA_ARGS=()
-          if [ -n "${TARGET_ENGINE_ID}" ]; then
-            EXTRA_ARGS+=(--agent_engine_id="${TARGET_ENGINE_ID}")
-          fi
+          # Use valid Python identifier directory (no hyphens) for ADK agent package
+          STAGE_DIR="/tmp/mnpi_compliance_agent"
+          rm -rf "${STAGE_DIR}"
+          mkdir -p "${STAGE_DIR}"
+          cp -r . "${STAGE_DIR}/"
+          cd "${STAGE_DIR}"
 
           adk deploy agent_engine . \
             --project=green-carrier-500109-k2 \
             --region="${DEPLOY_REGION}" \
             --display_name="mnpi-compliance-agent" \
             --description="Material Non-Public Information (MNPI) Compliance Decision Authority Agent" \
-            --otel_to_cloud \
-            "${EXTRA_ARGS[@]}"
+            --otel_to_cloud
