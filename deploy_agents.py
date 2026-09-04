@@ -6,7 +6,7 @@ Guarantees IN-PLACE updates ONLY:
   1. Compliance Agent (Agent Runtime):
      projects/799321431260/locations/us-central1/reasoningEngines/5693910574635679744
   2. Fact Checker Agent (Agent 1):
-     projects/799321431260/locations/us-central1/reasoningEngines/9003774825776283648
+     projects/799321431260/locations/us-central1/reasoningEngines/7905177991674593280
   3. Decision Authority Agent (Agent 2):
      projects/799321431260/locations/us-central1/reasoningEngines/6736493888371949568
 """
@@ -37,7 +37,7 @@ LOCATION = os.getenv("GOOGLE_CLOUD_LOCATION", "us-central1")
 STAGING_BUCKET = os.getenv("STAGING_BUCKET", "gs://green-carrier-500109-k2-agent-runtime-staging")
 
 COMPLIANCE_AGENT_ID = "5693910574635679744"
-FACT_CHECKER_ID = "9003774825776283648"
+FACT_CHECKER_ID = "7905177991674593280"
 DECISION_AUTHORITY_ID = "6736493888371949568"
 
 REQUIREMENTS = [
@@ -102,61 +102,21 @@ def init_vertex_env():
         )
 
 
-def update_fact_checker(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
-    """Updates Agent 1 (Fact Checker Runtime: 9003774825776283648) in-place."""
-    logger.info(f"🔄 Updating Agent 1 (Fact Checker) IN-PLACE: {FACT_CHECKER_ID}...")
-    fc_runtime = MNPIFactCheckerRuntime(project_id=project_id, location=location, model="gemini-3.8-flash")
-    resource_name = f"projects/{project_id}/locations/{location}/reasoningEngines/{FACT_CHECKER_ID}"
-
-    try:
-        fc = reasoning_engines.ReasoningEngine(resource_name)
-    except Exception as e:
-        raise RuntimeError(
-            f"❌ Agent 1 ({FACT_CHECKER_ID}) not found in {project_id}/{location}: {e}. "
-            "Deployment halted to prevent creating duplicate instances."
-        )
-
-    fc.update(
-        reasoning_engine=fc_runtime,
-        requirements=REQUIREMENTS,
-        extra_packages=EXTRA_PACKAGES,
-        display_name="mnpi-fact-checker-agent",
-        description="Material Non-Public Information (MNPI) Fact Checker Agent - Extracts entities, triggers, and verifies public mosaic status",
-    )
-    logger.info(f"✅ In-place update complete for Agent 1: {fc.resource_name}")
-    return fc.resource_name
+ADK_EXTRA_PACKAGES = [
+    "requirements.txt",
+    "config.py",
+    "schemas.py",
+    "fact_checker_agent.py",
+    "arbiter_agent.py",
+    "audit_logger.py",
+    "workflow.py",
+    "sub_agents",
+    "tools",
+]
 
 
-def update_decision_authority(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
-    """Updates Agent 2 (Decision Authority Runtime: 6736493888371949568) in-place."""
-    logger.info(f"🔄 Updating Agent 2 (Decision Authority) IN-PLACE: {DECISION_AUTHORITY_ID}...")
-    da_runtime = MNPIDecisionAuthorityRuntime(project_id=project_id, location=location, model="gemini-3.8-flash")
-    resource_name = f"projects/{project_id}/locations/{location}/reasoningEngines/{DECISION_AUTHORITY_ID}"
-
-    try:
-        da = reasoning_engines.ReasoningEngine(resource_name)
-    except Exception as e:
-        raise RuntimeError(
-            f"❌ Agent 2 ({DECISION_AUTHORITY_ID}) not found in {project_id}/{location}: {e}. "
-            "Deployment halted to prevent creating duplicate instances."
-        )
-
-    da.update(
-        reasoning_engine=da_runtime,
-        requirements=REQUIREMENTS,
-        extra_packages=EXTRA_PACKAGES,
-        display_name="mnpi-decision-authority-agent",
-        description="Material Non-Public Information (MNPI) Decision Authority Arbiter - Applies 4 Assessment Criteria for binding compliance verdict",
-    )
-    logger.info(f"✅ In-place update complete for Agent 2: {da.resource_name}")
-    return da.resource_name
-
-
-def update_compliance_agent(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
-    """Updates the primary ADK Compliance Agent (5693910574635679744) IN-PLACE."""
-    logger.info(f"🔄 Updating Compliance Agent IN-PLACE: {COMPLIANCE_AGENT_ID}...")
-
-    # Monkeypatch Pydantic validation to allow extra fields for Agent Engine config
+def _setup_adk_deployment_env(project_id: str):
+    """Sets up authentication and schema relaxation for ADK Agent Engine deployment."""
     from vertexai._genai.types import common
     common.AgentEngineConfig.model_config["extra"] = "allow"
 
@@ -177,17 +137,76 @@ def update_compliance_agent(project_id: str = PROJECT_ID, location: str = LOCATI
         creds = Credentials(token)
         google.auth.default = lambda *args, **kwargs: (creds, project_id)
 
+
+def _deploy_adk_agent(
+    agent_folder: str,
+    agent_engine_id: str,
+    display_name: str,
+    description: str,
+    extra_packages: Optional[List[str]] = None,
+    project_id: str = PROJECT_ID,
+    location: str = LOCATION,
+) -> str:
+    """Updates a Reasoning Engine instance in-place with google-adk, A2A protocol, and Cloud Telemetry."""
+    logger.info(f"🔄 Updating {display_name} IN-PLACE: {agent_engine_id} via google-adk (A2A + Cloud Telemetry)...")
+    _setup_adk_deployment_env(project_id)
+
     from google.adk.cli.cli_deploy import to_agent_engine
     to_agent_engine(
-        agent_folder=os.path.abspath("."),
+        agent_folder=os.path.abspath(agent_folder),
         project=project_id,
         region=location,
-        agent_engine_id=COMPLIANCE_AGENT_ID,
+        agent_engine_id=agent_engine_id,
+        otel_to_cloud=True,
+        trace_to_cloud=True,
+        display_name=display_name,
+        description=description,
+        requirements_file="requirements.txt",
+        extra_packages=extra_packages,
     )
 
-    resource_name = f"projects/{project_id}/locations/{location}/reasoningEngines/{COMPLIANCE_AGENT_ID}"
-    logger.info(f"✅ In-place update complete for Compliance Agent: {resource_name}")
+    resource_name = f"projects/{project_id}/locations/{location}/reasoningEngines/{agent_engine_id}"
+    logger.info(f"✅ In-place update complete for {display_name}: {resource_name}")
     return resource_name
+
+
+def update_fact_checker(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
+    """Updates Agent 1 (Fact Checker: 7905177991674593280) in-place with google-adk, A2A, and Cloud Telemetry."""
+    return _deploy_adk_agent(
+        agent_folder="agents/fact_checker",
+        agent_engine_id=FACT_CHECKER_ID,
+        display_name="mnpi-fact-checker-agent",
+        description="Material Non-Public Information (MNPI) Fact Checker Agent - Extracts entities, triggers, and verifies public mosaic status",
+        extra_packages=ADK_EXTRA_PACKAGES,
+        project_id=project_id,
+        location=location,
+    )
+
+
+def update_decision_authority(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
+    """Updates Agent 2 (Decision Authority: 6736493888371949568) in-place with google-adk, A2A, and Cloud Telemetry."""
+    return _deploy_adk_agent(
+        agent_folder="agents/decision_authority",
+        agent_engine_id=DECISION_AUTHORITY_ID,
+        display_name="mnpi-decision-authority-agent",
+        description="Material Non-Public Information (MNPI) Decision Authority Arbiter - Applies 4 Assessment Criteria for binding compliance verdict",
+        extra_packages=ADK_EXTRA_PACKAGES,
+        project_id=project_id,
+        location=location,
+    )
+
+
+def update_compliance_agent(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
+    """Updates Compliance Agent (5693910574635679744) in-place with google-adk, A2A, and Cloud Telemetry."""
+    return _deploy_adk_agent(
+        agent_folder=".",
+        agent_engine_id=COMPLIANCE_AGENT_ID,
+        display_name="mnpi-compliance-agent",
+        description="Material Non-Public Information (MNPI) Compliance Decision Authority Agent",
+        extra_packages=None,
+        project_id=project_id,
+        location=location,
+    )
 
 
 def deploy(target: str = "all", project_id: str = PROJECT_ID, location: str = LOCATION):

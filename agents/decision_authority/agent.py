@@ -27,4 +27,3 @@ except ImportError:
 runtime = MNPIDecisionAuthorityRuntime()
 
 __all__ = ["root_agent", "app", "runtime", "MNPIDecisionAuthorityRuntime"]
-

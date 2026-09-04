@@ -1,9 +1,12 @@
 {
   "display_name": "mnpi-decision-authority-agent",
-  "description": "MNPI Decision Authority Arbiter - Applies 4 Assessment Criteria and renders binding verdict",
+  "description": "Material Non-Public Information (MNPI) Decision Authority Arbiter - Applies 4 Assessment Criteria for binding compliance verdict",
   "env_vars": {
     "MNPI_ARBITER_MODEL": "gemini-3.8-flash",
-    "GOOGLE_CLOUD_PROJECT": "green-carrier-500109-k2",
-    "GOOGLE_CLOUD_LOCATION": "us"
-  }
+    "GOOGLE_CLOUD_LOCATION": "us",
+    "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true"
+  },
+  "entrypoint_module": "agents.decision_authority.agent",
+  "entrypoint_object": "runtime",
+  "requirements_file": "requirements.txt"
 }

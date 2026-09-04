@@ -1,0 +1,7 @@
+google-adk[a2a]>=2.7.0
+google-genai>=2.0.0
+pydantic>=2.10.0
+python-dotenv>=1.0.0
+google-cloud-aiplatform[adk,agent_engines]>=1.70.0
+google-cloud-bigquery>=3.20.0
+google-cloud-storage>=2.14.0

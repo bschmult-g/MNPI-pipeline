@@ -27,4 +27,3 @@ except ImportError:
 runtime = MNPIFactCheckerRuntime()
 
 __all__ = ["root_agent", "app", "runtime", "MNPIFactCheckerRuntime"]
-

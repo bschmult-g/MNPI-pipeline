@@ -72,7 +72,7 @@ jobs:
           echo "🚀 Updating Vertex AI Agent Engine instances IN-PLACE..."
           echo "   Target:             ${DEPLOY_TARGET}"
           echo "   Compliance Agent:   5693910574635679744"
-          echo "   Fact Checker Agent: 9003774825776283648"
+          echo "   Fact Checker Agent: 7905177991674593280"
           echo "   Decision Authority: 6736493888371949568"
           echo "   Region:             ${DEPLOY_REGION}"
           echo "======================================================="
