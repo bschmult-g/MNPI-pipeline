@@ -172,49 +172,141 @@ def get_preset_scenarios():
     return PRESET_SCENARIOS
 
 
-@app.get("/api/bucket/files")
-def list_quarantine_bucket_files():
-    """Lists files available in live GCS or the simulated quarantine bucket."""
-    gcs_bucket_name = os.getenv("GCS_QUARANTINE_BUCKET", "")
+DEFAULT_GCS_BUCKET = "green-carrier-500109-k2-quarantine"
+
+
+def get_storage_client(project_id: Optional[str] = None):
+    """Returns an authenticated google.cloud.storage.Client.
     
-    # Check if a real GCS bucket is configured and accessible
-    if gcs_bucket_name:
+    1. Attempts standard Google Cloud ADC credentials (verifying token validity).
+    2. Seamlessly falls back to local gcloud CLI access token if user is logged into gcloud.
+    """
+    project = project_id or os.getenv("GCP_PROJECT", "green-carrier-500109-k2")
+    try:
+        from google.cloud import storage
+        client = storage.Client(project=project)
+        # Test if ADC credentials actually work or require reauth
+        client.get_service_account_email()
+        return client
+    except Exception as e1:
+        logger.debug(f"Standard storage.Client() verification notice: {e1}")
+
+    try:
+        import subprocess
+        from google.oauth2.credentials import Credentials
+        from google.cloud import storage
+        token = subprocess.check_output(
+            ["gcloud", "auth", "print-access-token"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+        ).strip()
+        if token:
+            creds = Credentials(token)
+            return storage.Client(project=project, credentials=creds)
+    except Exception as e2:
+        logger.debug(f"gcloud access token fallback notice: {e2}")
+
+    return None
+
+
+def _read_and_validate_file(safe_name: str, content_bytes: bytes) -> str:
+    """Validates file extension and size, then returns decoded UTF-8 string."""
+    allowed_extensions = {".txt", ".json", ".md", ".eml", ".csv", ".log", ".transcript"}
+    ext = Path(safe_name).suffix.lower()
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file extension '{ext}'. Allowed: {sorted(allowed_extensions)}"
+        )
+    max_bytes = 5 * 1024 * 1024
+    if len(content_bytes) > max_bytes:
+        raise HTTPException(status_code=413, detail="File exceeds maximum allowed size of 5MB")
+    try:
+        return content_bytes.decode("utf-8", errors="replace")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Unable to decode text content: {e}")
+
+
+@app.get("/api/bucket/status")
+def get_bucket_status(bucket: Optional[str] = None):
+    """Checks connectivity to Google Cloud Storage and returns live status."""
+    target_bucket = bucket or os.getenv("GCS_QUARANTINE_BUCKET", DEFAULT_GCS_BUCKET)
+    client = get_storage_client()
+    if client:
         try:
-            from google.cloud import storage
-            client = storage.Client()
-            bucket = client.bucket(gcs_bucket_name)
-            blobs = list(bucket.list_blobs(prefix="incoming/"))
-            live_files = [
-                {
-                    "filename": os.path.basename(b.name),
-                    "gcs_uri": f"gs://{gcs_bucket_name}/{b.name}",
-                    "size_bytes": b.size,
-                }
-                for b in blobs if not b.name.endswith("/") and os.path.basename(b.name)
-            ]
-            if live_files:
+            b = client.bucket(target_bucket)
+            if b.exists():
                 return {
-                    "bucket": f"gs://{gcs_bucket_name}/incoming/",
-                    "files": live_files,
+                    "connected": True,
                     "mode": "live_gcs",
+                    "bucket_name": target_bucket,
+                    "bucket_uri": f"gs://{target_bucket}/incoming/",
+                    "project": client.project,
                 }
         except Exception as e:
-            logger.info(f"Live GCS bucket lookup ({gcs_bucket_name}) fell back to local: {e}")
+            logger.info(f"GCS bucket status check failed: {e}")
 
-    # Fallback to simulated local quarantine storage
+    return {
+        "connected": False,
+        "mode": "simulated",
+        "bucket_name": target_bucket,
+        "bucket_uri": f"gs://{target_bucket}/incoming/",
+        "detail": "Using simulated local quarantine directory (quarantine_bucket/incoming/)",
+    }
+
+
+@app.get("/api/bucket/files")
+def list_quarantine_bucket_files(bucket: Optional[str] = None):
+    """Lists files available in live GCS or the simulated quarantine bucket."""
+    target_bucket = bucket or os.getenv("GCS_QUARANTINE_BUCKET", DEFAULT_GCS_BUCKET)
+    
+    # 1. Check if real GCS bucket is accessible
+    client = get_storage_client()
+    if client and target_bucket:
+        try:
+            b = client.bucket(target_bucket)
+            blobs = list(b.list_blobs(prefix="incoming/"))
+            live_files = []
+            for blob in blobs:
+                name = os.path.basename(blob.name)
+                if not blob.name.endswith("/") and name and not name.startswith("."):
+                    updated_str = blob.updated.strftime("%Y-%m-%d %H:%M:%S UTC") if blob.updated else "Unknown"
+                    live_files.append({
+                        "filename": name,
+                        "gcs_uri": f"gs://{target_bucket}/{blob.name}",
+                        "size_bytes": blob.size,
+                        "updated": updated_str,
+                    })
+            if live_files or b.exists():
+                return {
+                    "bucket": f"gs://{target_bucket}/incoming/",
+                    "bucket_name": target_bucket,
+                    "files": live_files,
+                    "mode": "live_gcs",
+                    "count": len(live_files),
+                }
+        except Exception as e:
+            logger.info(f"Live GCS bucket lookup ({target_bucket}) fell back to local: {e}")
+
+    # 2. Fallback to simulated local quarantine storage
     files = []
     if QUARANTINE_DIR.exists():
         for path in sorted(QUARANTINE_DIR.glob("*")):
             if path.is_file() and not path.name.startswith("."):
+                mtime = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(path.stat().st_mtime))
                 files.append({
                     "filename": path.name,
-                    "gcs_uri": f"gs://{gcs_bucket_name or 'quarantine-holding-zone'}/incoming/{path.name}",
+                    "gcs_uri": f"gs://{target_bucket}/incoming/{path.name}",
                     "size_bytes": path.stat().st_size,
+                    "updated": mtime,
                 })
     return {
-        "bucket": f"gs://{gcs_bucket_name or 'quarantine-holding-zone'}/incoming/",
+        "bucket": f"gs://{target_bucket}/incoming/",
+        "bucket_name": target_bucket,
         "files": files,
         "mode": "simulated",
+        "count": len(files),
     }
 
 
@@ -225,16 +317,15 @@ def fetch_from_storage_bucket(req: FetchBucketRequest):
     if not uri.startswith("gs://"):
         raise HTTPException(status_code=400, detail="Invalid GCS URI. Must start with 'gs://'")
 
-    # 1. If it's a real GCS URI (not the default simulated 'quarantine-holding-zone'), try live GCS first
+    # 1. Attempt live GCS fetch
     match = re.match(r"^gs://([^/]+)/(.+)$", uri)
     if match:
         bucket_name, blob_name = match.groups()
-        if bucket_name != "quarantine-holding-zone":
+        client = get_storage_client()
+        if client:
             try:
-                from google.cloud import storage
-                client = storage.Client()
-                bucket = client.bucket(bucket_name)
-                blob = bucket.blob(blob_name)
+                b = client.bucket(bucket_name)
+                blob = b.blob(blob_name)
                 if blob.exists():
                     content = blob.download_as_text()
                     return {
@@ -270,44 +361,83 @@ def fetch_from_storage_bucket(req: FetchBucketRequest):
     )
 
 
+@app.post("/api/bucket/upload")
+async def upload_to_bucket(
+    file: UploadFile = File(...),
+    bucket: Optional[str] = Form(None),
+):
+    """Uploads a document directly to the GCS quarantine bucket (incoming/) and mirrors locally."""
+    safe_name = sanitize_filename(file.filename or "uploaded_doc.txt")
+    max_bytes = 5 * 1024 * 1024
+    content_bytes = await file.read(max_bytes + 1)
+    text = _read_and_validate_file(safe_name, content_bytes)
+
+    target_bucket = bucket or os.getenv("GCS_QUARANTINE_BUCKET", DEFAULT_GCS_BUCKET)
+    gcs_uploaded = False
+    gcs_uri = f"gs://{target_bucket}/incoming/{safe_name}"
+
+    client = get_storage_client()
+    if client:
+        try:
+            b = client.bucket(target_bucket)
+            blob = b.blob(f"incoming/{safe_name}")
+            blob.upload_from_string(content_bytes, content_type=file.content_type or "text/plain")
+            gcs_uploaded = True
+            logger.info(f"Successfully uploaded {safe_name} to live GCS {gcs_uri}")
+        except Exception as e:
+            logger.warning(f"Live GCS upload failed ({gcs_uri}), saved to local quarantine only: {e}")
+
+    # Mirror to local directory
+    dest_path = QUARANTINE_DIR / safe_name
+    dest_path.write_text(text, encoding="utf-8")
+
+    return {
+        "status": "QUARANTINED",
+        "filename": safe_name,
+        "gcs_uri": gcs_uri,
+        "uploaded_to_gcs": gcs_uploaded,
+        "mode": "live_gcs" if gcs_uploaded else "simulated",
+        "bucket": target_bucket,
+        "bytes": len(content_bytes),
+        "text": text,
+    }
+
+
 @app.post("/api/upload")
 async def upload_document(
     file: UploadFile = File(...),
     channel: str = Form("upload"),
 ):
-    """Receives a document upload, validates it, and stages it into Quarantine."""
+    """Receives a document upload, validates it, and stages it into GCS and Quarantine."""
     safe_name = sanitize_filename(file.filename or "uploaded.txt")
-
-    # Extension allowlist
-    allowed_extensions = {".txt", ".json", ".md", ".eml", ".csv", ".log", ".transcript"}
-    ext = Path(safe_name).suffix.lower()
-    if ext not in allowed_extensions:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported file extension '{ext}'. Allowed: {sorted(allowed_extensions)}"
-        )
-
-    # Read content with 5MB size limit
     max_bytes = 5 * 1024 * 1024
     content_bytes = await file.read(max_bytes + 1)
-    if len(content_bytes) > max_bytes:
-        raise HTTPException(status_code=413, detail="File exceeds maximum allowed size of 5MB")
+    text = _read_and_validate_file(safe_name, content_bytes)
 
-    try:
-        text = content_bytes.decode("utf-8", errors="replace")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Unable to decode text content: {e}")
+    target_bucket = os.getenv("GCS_QUARANTINE_BUCKET", DEFAULT_GCS_BUCKET)
+    gcs_uploaded = False
+    gcs_uri = f"gs://{target_bucket}/incoming/{safe_name}"
 
-    # Save to Quarantine Holding Zone
+    client = get_storage_client()
+    if client:
+        try:
+            b = client.bucket(target_bucket)
+            blob = b.blob(f"incoming/{safe_name}")
+            blob.upload_from_string(content_bytes, content_type=file.content_type or "text/plain")
+            gcs_uploaded = True
+        except Exception as e:
+            logger.warning(f"Live GCS upload fallback: {e}")
+
+    # Save to local quarantine
     dest_path = QUARANTINE_DIR / safe_name
     dest_path.write_text(text, encoding="utf-8")
-
-    quarantine_uri = f"gs://quarantine-holding-zone/incoming/{safe_name}"
 
     return {
         "status": "QUARANTINED",
         "filename": safe_name,
-        "quarantine_uri": quarantine_uri,
+        "quarantine_uri": gcs_uri,
+        "uploaded_to_gcs": gcs_uploaded,
+        "mode": "live_gcs" if gcs_uploaded else "simulated",
         "channel": channel,
         "text": text,
         "bytes": len(content_bytes),

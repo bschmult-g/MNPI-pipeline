@@ -59,18 +59,50 @@
         <div id="upload-status" class="upload-status-box hidden"></div>
       </div>
 
-      <!-- TAB CONTENT: STORAGE BUCKET -->
+      <!-- TAB CONTENT: STORAGE BUCKET (GCS BUCKET EXPLORER) -->
       <div id="section-bucket" class="tab-content">
-        <label class="field-label">Fetch from Cloud Storage Quarantine Bucket:</label>
-        <div class="bucket-browser">
-          <select id="bucket-select" class="form-select">
-            <option value="">-- Select file in gs://quarantine-holding-zone/ --</option>
-          </select>
-          <div class="input-with-btn">
-            <input type="text" id="gcs-uri-input" class="form-input" value="gs://quarantine-holding-zone/incoming/slack_channel_project_titan_deal.txt" placeholder="gs://bucket/path/to/file.txt">
-            <button id="btn-fetch-bucket" class="btn-secondary">Fetch</button>
+        <!-- GCS Status & Bucket Info -->
+        <div class="gcs-top-bar">
+          <div class="gcs-badge-group">
+            <span id="gcs-status-badge" class="gcs-status-badge live">
+              <span class="status-dot"></span>
+              <span id="gcs-status-label">Live GCS</span>
+            </span>
+            <code id="gcs-bucket-uri-display" class="gcs-bucket-code">gs://green-carrier-500109-k2-quarantine/incoming/</code>
+          </div>
+          <button id="btn-refresh-bucket" class="btn-secondary btn-sm" title="Refresh files from GCS">&#8635; Refresh</button>
+        </div>
+
+        <!-- Direct Upload to GCS Bucket -->
+        <div class="gcs-upload-container">
+          <div id="gcs-drop-zone" class="drop-zone gcs-drop-zone">
+            <div class="drop-icon" style="font-size: 1.5rem; margin-bottom: 0.25rem;">&#9729;</div>
+            <p class="drop-text">Upload Document to GCS Bucket</p>
+            <p class="drop-hint">Saves to incoming/ prefix in Cloud Storage (Max 5MB)</p>
+            <input type="file" id="gcs-file-input" class="file-input-hidden" accept=".txt,.json,.eml,.csv,.md,.log,.transcript">
+          </div>
+          <div id="gcs-upload-status" class="upload-status-box hidden"></div>
+        </div>
+
+        <!-- GCS Documents List -->
+        <div class="gcs-files-wrapper">
+          <div class="gcs-files-toolbar">
+            <label class="field-label" style="margin-bottom: 0;">Documents in Bucket (<span id="gcs-file-count">0</span>):</label>
+            <input type="text" id="gcs-filter-input" class="gcs-filter-box" placeholder="Filter by name...">
+          </div>
+          <div id="gcs-files-list" class="gcs-files-list">
+            <div class="gcs-empty-state">Loading bucket documents...</div>
           </div>
         </div>
+
+        <!-- Advanced URI Fetcher -->
+        <details class="gcs-custom-details">
+          <summary class="gcs-custom-summary">&#9881; Custom GCS URI</summary>
+          <div class="input-with-btn" style="margin-top: 0.5rem;">
+            <input type="text" id="gcs-uri-input" class="form-input" value="gs://green-carrier-500109-k2-quarantine/incoming/slack_channel_project_titan_deal.txt" placeholder="gs://bucket/path/to/file.txt">
+            <button id="btn-fetch-bucket" class="btn-secondary">Fetch</button>
+          </div>
+        </details>
       </div>
 
       <!-- DOCUMENT PREVIEW & CHANNEL -->

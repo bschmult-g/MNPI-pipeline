@@ -19,6 +19,8 @@
     redactedText: "",
     activeViewMode: "redacted",
     lastProcessedData: null,
+    bucketFiles: [],
+    selectedFileUri: null,
   };
 
   // DOM Element References
@@ -36,9 +38,21 @@
     dropZone: document.getElementById("drop-zone"),
     fileInput: document.getElementById("file-input"),
     uploadStatus: document.getElementById("upload-status"),
-    bucketSelect: document.getElementById("bucket-select"),
+
+    // GCS Bucket Explorer Elements
+    gcsStatusBadge: document.getElementById("gcs-status-badge"),
+    gcsStatusLabel: document.getElementById("gcs-status-label"),
+    gcsBucketUriDisplay: document.getElementById("gcs-bucket-uri-display"),
+    btnRefreshBucket: document.getElementById("btn-refresh-bucket"),
+    gcsDropZone: document.getElementById("gcs-drop-zone"),
+    gcsFileInput: document.getElementById("gcs-file-input"),
+    gcsUploadStatus: document.getElementById("gcs-upload-status"),
+    gcsFileCount: document.getElementById("gcs-file-count"),
+    gcsFilterInput: document.getElementById("gcs-filter-input"),
+    gcsFilesList: document.getElementById("gcs-files-list"),
     gcsUriInput: document.getElementById("gcs-uri-input"),
     btnFetchBucket: document.getElementById("btn-fetch-bucket"),
+
     documentText: document.getElementById("document-text"),
     charCount: document.getElementById("char-count"),
     channelChips: document.querySelectorAll(".channel-chip"),
@@ -235,42 +249,126 @@
   // Storage Bucket Browser & Fetch
   // ============================================================================
 
+  function formatBytes(bytes) {
+    if (!bytes || bytes === 0) return "0 B";
+    if (bytes < 1024) return bytes + " B";
+    return (bytes / 1024).toFixed(1) + " KB";
+  }
+
   async function loadBucketFileList() {
     try {
+      // 1. Check bucket status and mode
+      try {
+        const statusRes = await fetch("/api/bucket/status");
+        if (statusRes.ok) {
+          const statusData = await statusRes.json();
+          if (dom.gcsBucketUriDisplay) {
+            dom.gcsBucketUriDisplay.textContent = statusData.bucket_uri || "gs://green-carrier-500109-k2-quarantine/incoming/";
+          }
+          if (dom.gcsStatusBadge) {
+            dom.gcsStatusBadge.className = "gcs-status-badge " + (statusData.connected ? "live" : "simulated");
+          }
+          if (dom.gcsStatusLabel) {
+            dom.gcsStatusLabel.textContent = statusData.connected ? "Live GCS" : "Simulated";
+          }
+        }
+      } catch (e) {
+        // Status check fallback
+      }
+
+      // 2. Fetch list of files
       const res = await fetch("/api/bucket/files");
       if (!res.ok) throw new Error("Failed to load bucket files");
       const data = await res.json();
-
-      clearElement(dom.bucketSelect);
-
-      const defaultOpt = document.createElement("option");
-      defaultOpt.value = "";
-      defaultOpt.textContent = "-- Select file in " + (data.bucket || "gs://quarantine-holding-zone/incoming/") + " --";
-      dom.bucketSelect.appendChild(defaultOpt);
-
-      data.files.forEach(function (file) {
-        const opt = document.createElement("option");
-        opt.value = file.gcs_uri;
-        opt.textContent = file.filename + " (" + file.size_bytes + " bytes)";
-        dom.bucketSelect.appendChild(opt);
-      });
+      state.bucketFiles = data.files || [];
+      renderBucketFileList();
     } catch (err) {
-      // Bucket list optional failure
+      if (dom.gcsFilesList) {
+        clearElement(dom.gcsFilesList);
+        dom.gcsFilesList.appendChild(
+          createTextElement("div", "Failed to load files: " + err.message, "gcs-empty-state")
+        );
+      }
     }
   }
 
-  dom.bucketSelect.addEventListener("change", function () {
-    if (dom.bucketSelect.value) {
-      dom.gcsUriInput.value = dom.bucketSelect.value;
+  function renderBucketFileList() {
+    if (!dom.gcsFilesList) return;
+    clearElement(dom.gcsFilesList);
+
+    const query = dom.gcsFilterInput ? dom.gcsFilterInput.value.toLowerCase().trim() : "";
+    const filtered = state.bucketFiles.filter(function (file) {
+      return !query || file.filename.toLowerCase().includes(query);
+    });
+
+    if (dom.gcsFileCount) {
+      dom.gcsFileCount.textContent = String(filtered.length);
     }
-  });
 
-  dom.btnFetchBucket.addEventListener("click", async function () {
-    const uri = dom.gcsUriInput.value.trim();
+    if (filtered.length === 0) {
+      const emptyMsg = state.bucketFiles.length === 0
+        ? "No documents in quarantine bucket. Upload one above!"
+        : "No matching documents found.";
+      dom.gcsFilesList.appendChild(createTextElement("div", emptyMsg, "gcs-empty-state"));
+      return;
+    }
+
+    filtered.forEach(function (file) {
+      const item = document.createElement("div");
+      item.className = "gcs-file-item" + (state.selectedFileUri === file.gcs_uri ? " selected" : "");
+
+      const info = document.createElement("div");
+      info.className = "gcs-file-info";
+
+      const icon = document.createElement("span");
+      icon.className = "gcs-file-icon";
+      icon.textContent = "📄";
+      info.appendChild(icon);
+
+      const meta = document.createElement("div");
+      meta.className = "gcs-file-meta";
+
+      const nameEl = createTextElement("div", file.filename, "gcs-file-name");
+      nameEl.title = file.gcs_uri;
+      meta.appendChild(nameEl);
+
+      const subEl = createTextElement(
+        "div",
+        formatBytes(file.size_bytes) + " • " + (file.updated || "GCS"),
+        "gcs-file-sub"
+      );
+      meta.appendChild(subEl);
+      info.appendChild(meta);
+      item.appendChild(info);
+
+      const actions = document.createElement("div");
+      actions.className = "gcs-file-actions";
+
+      const btnIngest = document.createElement("button");
+      btnIngest.className = "btn-action";
+      btnIngest.textContent = "Ingest";
+      btnIngest.title = "Load document into Compliance Cockpit";
+
+      btnIngest.addEventListener("click", function () {
+        state.selectedFileUri = file.gcs_uri;
+        document.querySelectorAll(".gcs-file-item").forEach(function (el) {
+          el.classList.remove("selected");
+        });
+        item.classList.add("selected");
+        if (dom.gcsUriInput) dom.gcsUriInput.value = file.gcs_uri;
+        fetchAndLoadGcsFile(file.gcs_uri);
+      });
+
+      actions.appendChild(btnIngest);
+      item.appendChild(actions);
+      dom.gcsFilesList.appendChild(item);
+    });
+  }
+
+  async function fetchAndLoadGcsFile(uri) {
     if (!uri) return;
-
-    dom.btnFetchBucket.textContent = "Fetching...";
     try {
+      if (dom.btnFetchBucket) dom.btnFetchBucket.textContent = "Fetching...";
       const res = await fetch("/api/bucket/fetch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -286,26 +384,130 @@
       state.documentTitle = data.filename;
       updateTextareaContent(data.content);
 
-      // Auto-detect channel from filename
-      if (data.filename.includes("zoom")) setChannelActive("zoom");
-      else if (data.filename.includes("slack")) setChannelActive("slack");
-      else if (data.filename.includes("email")) setChannelActive("email");
-      else if (data.filename.includes("salesforce")) setChannelActive("salesforce");
+      const lower = data.filename.toLowerCase();
+      if (lower.includes("zoom")) setChannelActive("zoom");
+      else if (lower.includes("slack")) setChannelActive("slack");
+      else if (lower.includes("email")) setChannelActive("email");
+      else if (lower.includes("salesforce")) setChannelActive("salesforce");
       else setChannelActive("cloud_storage");
 
-      dom.uploadStatus.className = "upload-status-box";
-      dom.uploadStatus.textContent = "Fetched: " + data.gcs_uri + " (" + data.bytes + " bytes)";
-      dom.uploadStatus.classList.remove("hidden");
+      if (dom.gcsUploadStatus) {
+        dom.gcsUploadStatus.className = "upload-status-box";
+        dom.gcsUploadStatus.textContent = "Loaded from GCS: " + data.gcs_uri + " (" + data.bytes + " bytes)";
+        dom.gcsUploadStatus.classList.remove("hidden");
+      }
     } catch (err) {
-      dom.uploadStatus.className = "upload-status-box";
-      dom.uploadStatus.style.borderColor = "#ef4444";
-      dom.uploadStatus.style.color = "#f87171";
-      dom.uploadStatus.textContent = "Fetch error: " + err.message;
-      dom.uploadStatus.classList.remove("hidden");
+      if (dom.gcsUploadStatus) {
+        dom.gcsUploadStatus.className = "upload-status-box";
+        dom.gcsUploadStatus.style.borderColor = "#ef4444";
+        dom.gcsUploadStatus.style.color = "#f87171";
+        dom.gcsUploadStatus.textContent = "Fetch error: " + err.message;
+        dom.gcsUploadStatus.classList.remove("hidden");
+      }
     } finally {
-      dom.btnFetchBucket.textContent = "Fetch";
+      if (dom.btnFetchBucket) dom.btnFetchBucket.textContent = "Fetch";
     }
-  });
+  }
+
+  if (dom.btnRefreshBucket) {
+    dom.btnRefreshBucket.addEventListener("click", function () {
+      loadBucketFileList();
+    });
+  }
+
+  if (dom.gcsFilterInput) {
+    dom.gcsFilterInput.addEventListener("input", function () {
+      renderBucketFileList();
+    });
+  }
+
+  if (dom.gcsDropZone) {
+    dom.gcsDropZone.addEventListener("click", function () {
+      if (dom.gcsFileInput) dom.gcsFileInput.click();
+    });
+
+    dom.gcsDropZone.addEventListener("dragover", function (e) {
+      e.preventDefault();
+      dom.gcsDropZone.classList.add("dragover");
+    });
+
+    dom.gcsDropZone.addEventListener("dragleave", function () {
+      dom.gcsDropZone.classList.remove("dragover");
+    });
+
+    dom.gcsDropZone.addEventListener("drop", function (e) {
+      e.preventDefault();
+      dom.gcsDropZone.classList.remove("dragover");
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        uploadDirectToGcs(e.dataTransfer.files[0]);
+      }
+    });
+  }
+
+  if (dom.gcsFileInput) {
+    dom.gcsFileInput.addEventListener("change", function () {
+      if (dom.gcsFileInput.files && dom.gcsFileInput.files.length > 0) {
+        uploadDirectToGcs(dom.gcsFileInput.files[0]);
+      }
+    });
+  }
+
+  async function uploadDirectToGcs(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    if (dom.gcsUploadStatus) {
+      dom.gcsUploadStatus.className = "upload-status-box";
+      dom.gcsUploadStatus.textContent = "Uploading " + file.name + " to GCS bucket...";
+      dom.gcsUploadStatus.classList.remove("hidden");
+    }
+
+    try {
+      const res = await fetch("/api/bucket/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.detail || "Upload to GCS failed");
+      }
+
+      const data = await res.json();
+      state.documentTitle = data.filename;
+      updateTextareaContent(data.text);
+
+      const lower = data.filename.toLowerCase();
+      if (lower.includes("zoom")) setChannelActive("zoom");
+      else if (lower.includes("slack")) setChannelActive("slack");
+      else if (lower.includes("email")) setChannelActive("email");
+      else if (lower.includes("salesforce")) setChannelActive("salesforce");
+      else setChannelActive("cloud_storage");
+
+      if (dom.gcsUploadStatus) {
+        dom.gcsUploadStatus.className = "upload-status-box";
+        dom.gcsUploadStatus.textContent = "✓ Uploaded to GCS: " + data.gcs_uri + " (" + data.bytes + " bytes)";
+        dom.gcsUploadStatus.classList.remove("hidden");
+      }
+
+      await loadBucketFileList();
+    } catch (err) {
+      if (dom.gcsUploadStatus) {
+        dom.gcsUploadStatus.className = "upload-status-box";
+        dom.gcsUploadStatus.style.borderColor = "#ef4444";
+        dom.gcsUploadStatus.style.color = "#f87171";
+        dom.gcsUploadStatus.textContent = "GCS Upload error: " + err.message;
+        dom.gcsUploadStatus.classList.remove("hidden");
+      }
+    }
+  }
+
+  if (dom.btnFetchBucket) {
+    dom.btnFetchBucket.addEventListener("click", function () {
+      const uri = dom.gcsUriInput ? dom.gcsUriInput.value.trim() : "";
+      if (uri) fetchAndLoadGcsFile(uri);
+    });
+  }
 
   // ============================================================================
   // File Upload Handlers (Drag & Drop + File Picker)
@@ -362,7 +564,9 @@
       state.documentTitle = data.filename;
       updateTextareaContent(data.text);
 
-      dom.uploadStatus.textContent = "Quarantined in Cloud Storage: " + data.quarantine_uri;
+      dom.uploadStatus.textContent = data.uploaded_to_gcs
+        ? "✓ Staged in Live GCS Quarantine: " + data.quarantine_uri + " (" + data.bytes + " bytes)"
+        : "Quarantined in Holding Zone: " + data.quarantine_uri + " (" + data.bytes + " bytes)";
       loadBucketFileList(); // Refresh bucket dropdown
     } catch (err) {
       dom.uploadStatus.style.borderColor = "#ef4444";

@@ -143,8 +143,17 @@ class TestDemoServer(unittest.TestCase):
         self.assertIn("email", channels)
         self.assertIn("salesforce", channels)
 
+    def test_bucket_status(self):
+        """Validates that GET /api/bucket/status returns bucket connection status."""
+        resp = self.client.get("/api/bucket/status")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("mode", data)
+        self.assertIn("bucket_name", data)
+        self.assertIn("incoming/", data["bucket_uri"])
+
     def test_bucket_files_listing_and_fetch(self):
-        """Validates simulated GCS bucket listing and fetching."""
+        """Validates simulated/live GCS bucket listing and fetching."""
         resp = self.client.get("/api/bucket/files")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -167,7 +176,18 @@ class TestDemoServer(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         self.assertEqual(data["status"], "QUARANTINED")
-        self.assertIn("gs://quarantine-holding-zone/incoming/", data["quarantine_uri"])
+        self.assertIn("/incoming/test_transcript.txt", data["quarantine_uri"])
+        self.assertEqual(data["text"], sample_bytes.decode())
+
+    def test_bucket_direct_upload(self):
+        """Validates direct upload to GCS quarantine bucket."""
+        sample_bytes = b"[Email Alert] Direct GCS upload validation payload."
+        files = {"file": ("direct_upload_test.txt", sample_bytes, "text/plain")}
+        resp = self.client.post("/api/bucket/upload", files=files)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "QUARANTINED")
+        self.assertIn("/incoming/direct_upload_test.txt", data["gcs_uri"])
         self.assertEqual(data["text"], sample_bytes.decode())
 
     def test_process_document_routing(self):
