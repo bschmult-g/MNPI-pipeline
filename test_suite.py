@@ -209,13 +209,61 @@ class TestDemoServer(unittest.TestCase):
         self.assertTrue(data["audit"]["logged_to_bigquery"] or data["audit"]["status"] in ["COMPLETED", "RECORDED", "LOGGED_LOCALLY"])
 
     def test_audit_api_endpoints(self):
-        """Validates BigQuery audit log status and query endpoints."""
+        """Validates BigQuery audit log status, schema, and query endpoints."""
+        # Ensure at least one test record exists so audit query is self-contained
+        from audit_logger import log_document_alignment_to_bq
+        from schemas import ArbiterVerdict, CriteriaAssessment
+        sample_verdict = ArbiterVerdict(
+            verdict="CLEARED",
+            risk_level="LOW",
+            materiality_test=CriteriaAssessment(
+                test_name="Basic Inc. Materiality Test",
+                passed_or_failed="CLEARED / NON-MATERIAL",
+                score=0.1,
+                rationale="Lacks market-moving significance.",
+            ),
+            public_availability_test=CriteriaAssessment(
+                test_name="Mosaic Public Availability Test",
+                passed_or_failed="PUBLIC",
+                score=0.1,
+                rationale="Publicly confirmed in disclosures.",
+            ),
+            source_and_duty_test=CriteriaAssessment(
+                test_name="Chiarella / Dirks Duty Test",
+                passed_or_failed="NO BREACH",
+                score=0.0,
+                rationale="No insider duty breached.",
+            ),
+            actionability_harm_test=CriteriaAssessment(
+                test_name="Actionability / Harm Test",
+                passed_or_failed="BENIGN",
+                score=0.0,
+                rationale="Negligible impact.",
+            ),
+            recommended_action="APPROVE_RELEASE",
+            summary_justification="CI automated test validation record.",
+            redacted_text="Test snippet",
+        )
+        log_document_alignment_to_bq(
+            document_name="CI_Test_Verification.txt",
+            raw_text="Routine CI verification snippet",
+            verdict=sample_verdict,
+            channel="ci_test",
+        )
+
         status_resp = self.client.get("/api/audit/status")
         self.assertEqual(status_resp.status_code, 200)
         status_data = status_resp.json()
         self.assertIn("dataset", status_data)
         self.assertIn("table", status_data)
         self.assertIn("total_records", status_data)
+
+        # Test schema endpoint
+        schema_resp = self.client.get("/api/audit/schema")
+        self.assertEqual(schema_resp.status_code, 200)
+        schema_data = schema_resp.json()
+        self.assertIn("fields", schema_data)
+        self.assertEqual(len(schema_data["fields"]), 18)
 
         logs_resp = self.client.get("/api/audit/logs")
         self.assertEqual(logs_resp.status_code, 200)

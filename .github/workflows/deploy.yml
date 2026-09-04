@@ -43,10 +43,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Compliance Pipeline Test Suite
-        run: |
-          python test_suite.py
-
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
@@ -63,6 +59,10 @@ jobs:
           echo "Authenticated active account:"
           gcloud auth list
           echo "Current project: $(gcloud config get-value project)"
+
+      - name: Run Compliance Pipeline Test Suite
+        run: |
+          python test_suite.py
 
       - name: Deploy Both Agents to Vertex AI Agent Engine
         run: |

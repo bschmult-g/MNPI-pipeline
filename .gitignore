@@ -28,3 +28,4 @@ ENV/
 .adk/
 *_tmp*
 quarantine_bucket/audit_log.json
+quarantine_bucket/incoming/
