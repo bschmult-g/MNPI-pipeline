@@ -39,8 +39,8 @@ class AgentSettings(BaseModel):
     )
 
     api_endpoint: str = Field(
-        default="https://us-aiplatform.googleapis.com",
-        description="Regional API endpoint for US multi-region"
+        default=os.getenv("VERTEX_API_ENDPOINT", "https://aiplatform.googleapis.com"),
+        description="Regional API endpoint for Vertex AI"
     )
 
     # Known internal project codenames (users can customize/extend this)
