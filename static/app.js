@@ -21,6 +21,7 @@
     lastProcessedData: null,
     bucketFiles: [],
     selectedFileUri: null,
+    auditRecords: [],
   };
 
   // DOM Element References
@@ -96,6 +97,18 @@
     metaLatency: document.getElementById("meta-latency"),
     metaRisk: document.getElementById("meta-risk"),
     metaAction: document.getElementById("meta-action"),
+
+    // BigQuery Document Alignment Audit DOM Elements
+    bqStatusPill: document.getElementById("bq-status-pill"),
+    bqStatusText: document.getElementById("bq-status-text"),
+    btnRefreshAudit: document.getElementById("btn-refresh-audit"),
+    auditSearchInput: document.getElementById("audit-search-input"),
+    auditVerdictFilter: document.getElementById("audit-verdict-filter"),
+    auditTableBody: document.getElementById("audit-table-body"),
+    auditModal: document.getElementById("audit-modal"),
+    modalDocTitle: document.getElementById("modal-doc-title"),
+    modalDocBody: document.getElementById("modal-doc-body"),
+    btnCloseModal: document.getElementById("btn-close-modal"),
   };
 
   // ============================================================================
@@ -615,6 +628,7 @@
       state.redactedText = result.verdict.redacted_text || text;
 
       renderPipelineResults(result);
+      loadAuditLogs();
     } catch (err) {
       alert("Pipeline Error: " + err.message);
     } finally {
@@ -820,7 +834,330 @@
     dom.outputContainer.appendChild(diffContainer);
   }
 
+  // ============================================================================
+  // BigQuery Document Alignment Audit Table Logic
+  // ============================================================================
+
+  async function loadAuditLogs() {
+    try {
+      // 1. Fetch BigQuery status
+      const statusRes = await fetch("/api/audit/status");
+      if (statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (dom.bqStatusText) {
+          dom.bqStatusText.textContent = `BigQuery: ${statusData.connected ? "Connected" : "Local Mirror"} (${statusData.total_records} records)`;
+        }
+      }
+
+      // 2. Fetch BigQuery logs
+      const logsRes = await fetch("/api/audit/logs?limit=50");
+      if (logsRes.ok) {
+        const logsData = await logsRes.json();
+        state.auditRecords = logsData.records || [];
+        renderAuditTable();
+      }
+    } catch (err) {
+      console.warn("Failed to load BigQuery audit logs:", err);
+      if (dom.auditTableBody) {
+        clearElement(dom.auditTableBody);
+        const tr = document.createElement("tr");
+        const td = createTextElement("td", "Unable to load audit logs from BigQuery.", "audit-table-loading");
+        td.colSpan = 9;
+        tr.appendChild(td);
+        dom.auditTableBody.appendChild(tr);
+      }
+    }
+  }
+
+  function renderAuditTable() {
+    if (!dom.auditTableBody) return;
+    clearElement(dom.auditTableBody);
+
+    const query = (dom.auditSearchInput ? dom.auditSearchInput.value : "").trim().toLowerCase();
+    const verdictFilter = dom.auditVerdictFilter ? dom.auditVerdictFilter.value : "ALL";
+
+    const filtered = state.auditRecords.filter(function (rec) {
+      if (verdictFilter !== "ALL" && rec.verdict !== verdictFilter) {
+        return false;
+      }
+      if (query) {
+        const docName = (rec.document_name || "").toLowerCase();
+        const verdict = (rec.verdict || "").toLowerCase();
+        const triggers = (rec.triggers_detected || "").toLowerCase();
+        const entities = (rec.entities_detected || "").toLowerCase();
+        const hash = (rec.audit_hash || "").toLowerCase();
+        if (
+          !docName.includes(query) &&
+          !verdict.includes(query) &&
+          !triggers.includes(query) &&
+          !entities.includes(query) &&
+          !hash.includes(query)
+        ) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      const tr = document.createElement("tr");
+      const td = createTextElement("td", "No matching document alignment records found in BigQuery.", "audit-table-loading");
+      td.colSpan = 9;
+      tr.appendChild(td);
+      dom.auditTableBody.appendChild(tr);
+      return;
+    }
+
+    filtered.forEach(function (rec) {
+      const tr = document.createElement("tr");
+
+      // 1. Timestamp
+      let timeStr = "-";
+      if (rec.timestamp) {
+        try {
+          const d = new Date(rec.timestamp);
+          timeStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+        } catch (e) {
+          timeStr = rec.timestamp.slice(0, 19);
+        }
+      }
+      const tdTime = createTextElement("td", timeStr);
+      tdTime.style.whiteSpace = "nowrap";
+      tdTime.style.fontSize = "0.75rem";
+      tdTime.style.color = "var(--text-muted)";
+      tr.appendChild(tdTime);
+
+      // 2. Document Name
+      const tdDoc = document.createElement("td");
+      tdDoc.className = "doc-name-cell";
+      tdDoc.textContent = rec.document_name || "untitled.txt";
+      tdDoc.title = rec.document_name || "";
+      tr.appendChild(tdDoc);
+
+      // 3. Channel
+      const tdChannel = document.createElement("td");
+      const channelSpan = document.createElement("span");
+      channelSpan.className = "channel-pill";
+      channelSpan.textContent = rec.channel || "gcs";
+      tdChannel.appendChild(channelSpan);
+      tr.appendChild(tdChannel);
+
+      // 4. Verdict Badge
+      const tdVerdict = document.createElement("td");
+      const vBadge = document.createElement("span");
+      vBadge.className = "verdict-badge";
+      if (rec.verdict === "MNPI_CONFIRMED") {
+        vBadge.classList.add("confirmed");
+        vBadge.textContent = "MNPI CONFIRMED";
+      } else if (rec.verdict === "POTENTIAL_MNPI") {
+        vBadge.classList.add("potential");
+        vBadge.textContent = "POTENTIAL MNPI";
+      } else {
+        vBadge.classList.add("cleared");
+        vBadge.textContent = rec.verdict || "CLEARED";
+      }
+      tdVerdict.appendChild(vBadge);
+      tr.appendChild(tdVerdict);
+
+      // 5. Recommended Action
+      const tdAction = document.createElement("td");
+      tdAction.style.fontSize = "0.75rem";
+      tdAction.style.fontWeight = "600";
+      if (rec.recommended_action === "BLOCK_COMMUNICATION") {
+        tdAction.style.color = "#f87171";
+      } else if (rec.recommended_action === "ESCALATE_TO_COMPLIANCE") {
+        tdAction.style.color = "#fbbf24";
+      } else {
+        tdAction.style.color = "#34d399";
+      }
+      tdAction.textContent = rec.recommended_action || "-";
+      tr.appendChild(tdAction);
+
+      // 6. 4 Assessment Criteria Alignment Scores (Mini Grid)
+      const tdScores = document.createElement("td");
+      const grid = document.createElement("div");
+      grid.className = "score-mini-grid";
+
+      function appendMiniScore(label, val) {
+        const item = document.createElement("div");
+        item.className = "score-item-mini";
+        const lbl = createTextElement("span", label);
+        const num = createTextElement("strong", Math.round(val * 100) + "%");
+        const track = document.createElement("div");
+        track.className = "score-bar-mini";
+        const fill = document.createElement("div");
+        fill.className = "score-fill-mini";
+        fill.style.width = Math.round(val * 100) + "%";
+        if (val >= 0.7) {
+          fill.style.background = "#f87171";
+          num.style.color = "#f87171";
+        } else if (val >= 0.4) {
+          fill.style.background = "#fbbf24";
+          num.style.color = "#fbbf24";
+        } else {
+          fill.style.background = "#34d399";
+          num.style.color = "#34d399";
+        }
+        track.appendChild(fill);
+        item.appendChild(lbl);
+        item.appendChild(num);
+        item.appendChild(track);
+        grid.appendChild(item);
+      }
+
+      appendMiniScore("Mat", rec.materiality_score || 0);
+      appendMiniScore("Pub", rec.public_availability_score || 0);
+      appendMiniScore("Src", rec.source_duty_score || 0);
+      appendMiniScore("Harm", rec.harm_score || 0);
+      tdScores.appendChild(grid);
+      tr.appendChild(tdScores);
+
+      // 7. Latency
+      const tdLatency = createTextElement("td", (rec.latency_ms ? (rec.latency_ms / 1000).toFixed(1) + "s" : "-"));
+      tdLatency.style.fontSize = "0.75rem";
+      tdLatency.style.color = "var(--text-muted)";
+      tr.appendChild(tdLatency);
+
+      // 8. Audit Hash
+      const tdHash = document.createElement("td");
+      const hashSpan = document.createElement("span");
+      hashSpan.className = "hash-cell";
+      const fullHash = rec.audit_hash || "";
+      hashSpan.textContent = fullHash.length > 14 ? fullHash.slice(0, 14) + "…" : fullHash;
+      hashSpan.title = "Click to copy audit hash:\n" + fullHash;
+      hashSpan.addEventListener("click", function () {
+        navigator.clipboard.writeText(fullHash).then(function () {
+          alert("Copied audit hash to clipboard: " + fullHash);
+        });
+      });
+      tdHash.appendChild(hashSpan);
+      tr.appendChild(tdHash);
+
+      // 9. Inspect Action
+      const tdInspect = document.createElement("td");
+      const btnInspect = document.createElement("button");
+      btnInspect.className = "btn-inspect";
+      btnInspect.textContent = "Inspect";
+      btnInspect.addEventListener("click", function () {
+        showAuditModal(rec);
+      });
+      tdInspect.appendChild(btnInspect);
+      tr.appendChild(tdInspect);
+
+      dom.auditTableBody.appendChild(tr);
+    });
+  }
+
+  function showAuditModal(rec) {
+    if (!dom.auditModal || !dom.modalDocBody) return;
+    clearElement(dom.modalDocBody);
+
+    if (dom.modalDocTitle) {
+      dom.modalDocTitle.textContent = "Audit Record: " + (rec.document_name || "Document");
+    }
+
+    // Top Details Grid
+    const detailsRow = document.createElement("div");
+    detailsRow.className = "modal-detail-row";
+
+    function appendField(label, val) {
+      const f = document.createElement("div");
+      f.className = "modal-field";
+      f.appendChild(createTextElement("div", label, "modal-field-label"));
+      f.appendChild(createTextElement("div", val, "modal-field-value"));
+      detailsRow.appendChild(f);
+    }
+
+    appendField("Verdict", rec.verdict || "N/A");
+    appendField("Risk Level", rec.risk_level || "N/A");
+    appendField("Recommended Action", rec.recommended_action || "N/A");
+    appendField("Ingestion Channel", rec.channel || "N/A");
+    appendField("Model Used", rec.model_used || "gemini-3.8-flash");
+    appendField("Pipeline Latency", (rec.latency_ms ? rec.latency_ms + " ms" : "-"));
+
+    dom.modalDocBody.appendChild(detailsRow);
+
+    // Cryptographic Audit Hash
+    const hashSec = document.createElement("div");
+    hashSec.style.marginBottom = "1rem";
+    hashSec.appendChild(createTextElement("div", "Cryptographic Audit Hash (SHA-256)", "modal-field-label"));
+    const hashBox = createTextElement("div", rec.audit_hash || "N/A", "modal-box");
+    hashBox.style.padding = "0.4rem 0.6rem";
+    hashSec.appendChild(hashBox);
+    dom.modalDocBody.appendChild(hashSec);
+
+    // Legal Justification
+    const justSec = document.createElement("div");
+    justSec.style.marginBottom = "1rem";
+    justSec.appendChild(createTextElement("div", "Defensible Legal & Regulatory Justification", "modal-field-label"));
+    const justBox = createTextElement("div", rec.summary_justification || "No justification recorded.", "modal-box");
+    justSec.appendChild(justBox);
+    dom.modalDocBody.appendChild(justSec);
+
+    // Detected Signals
+    const signalsSec = document.createElement("div");
+    signalsSec.style.marginBottom = "1rem";
+    signalsSec.appendChild(createTextElement("div", "Detected Entities & Corporate Triggers", "modal-field-label"));
+    const sigRow = document.createElement("div");
+    sigRow.style.fontSize = "0.85rem";
+    sigRow.style.color = "var(--text-primary)";
+    sigRow.appendChild(createTextElement("p", "Entities: " + (rec.entities_detected || "None flagged")));
+    sigRow.appendChild(createTextElement("p", "Triggers: " + (rec.triggers_detected || "None flagged")));
+    sigRow.appendChild(createTextElement("p", "Confidentiality / Secrecy Markers: " + (rec.has_secrecy_markers ? "YES (Detected)" : "No")));
+    signalsSec.appendChild(sigRow);
+    dom.modalDocBody.appendChild(signalsSec);
+
+    // Redacted Preview
+    if (rec.redacted_preview) {
+      const redSec = document.createElement("div");
+      redSec.appendChild(createTextElement("div", "Redacted Content Preview", "modal-field-label"));
+      const redBox = createTextElement("div", rec.redacted_preview, "modal-box");
+      redSec.appendChild(redBox);
+      dom.modalDocBody.appendChild(redSec);
+    }
+
+    dom.auditModal.classList.remove("hidden");
+  }
+
+  function hideAuditModal() {
+    if (dom.auditModal) {
+      dom.auditModal.classList.add("hidden");
+    }
+  }
+
+  // Audit event bindings
+  if (dom.btnRefreshAudit) {
+    dom.btnRefreshAudit.addEventListener("click", function () {
+      loadAuditLogs();
+    });
+  }
+
+  if (dom.auditSearchInput) {
+    dom.auditSearchInput.addEventListener("input", function () {
+      renderAuditTable();
+    });
+  }
+
+  if (dom.auditVerdictFilter) {
+    dom.auditVerdictFilter.addEventListener("change", function () {
+      renderAuditTable();
+    });
+  }
+
+  if (dom.btnCloseModal) {
+    dom.btnCloseModal.addEventListener("click", hideAuditModal);
+  }
+
+  if (dom.auditModal) {
+    dom.auditModal.addEventListener("click", function (e) {
+      if (e.target === dom.auditModal) {
+        hideAuditModal();
+      }
+    });
+  }
+
   // Initialize
   loadPresetScenarios();
   loadBucketFileList();
+  loadAuditLogs();
 })();

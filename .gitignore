@@ -27,3 +27,4 @@ ENV/
 # Google ADK local cache & deployment staging
 .adk/
 *_tmp*
+quarantine_bucket/audit_log.json

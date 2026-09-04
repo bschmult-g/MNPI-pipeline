@@ -80,14 +80,20 @@ This system implements a two-agent architecture for automated compliance evaluat
 
 ```
 mnpi_adk_agent/
-├── config.py                 # Central configuration, models, trigger dictionaries, codenames
+├── config.py                 # Central configuration, models (gemini-3.8-flash), region (us)
 ├── schemas.py                # Pydantic models (SA1, SA2, SA3 outputs, Dossier, ArbiterVerdict)
 ├── fact_checker_agent.py     # Agent 1: Coordinates SA1, SA2, SA3 sub-agents as tools
 ├── arbiter_agent.py          # Agent 2: Decision Authority applying the 4 Assessment Tests
-├── workflow.py               # Native ADK Workflow, Runner, and offline deterministic executor
+├── audit_logger.py           # BigQuery streaming audit logger and historical query engine
+├── deploy_agents.py          # Script to deploy/verify both distinct Reasoning Engines in Vertex AI
+├── workflow.py               # Two-agent sequential pipeline orchestrator and live Gemini runner
+├── demo_server.py            # Local FastAPI demonstration server with interactive dashboard
 ├── main.py                   # Interactive CLI and scenario runner
-├── test_suite.py             # Unit and integration test suite
-├── .env.example              # Environment variables template
+├── test_suite.py             # Unit and integration test suite (17 comprehensive tests)
+├── requirements.txt          # Python package dependencies
+├── agents/                   # Separate ADK Apps for distinct Reasoning Engine deployment
+│   ├── fact_checker/         # mnpi-fact-checker-agent (ID: 7905177991674593280)
+│   └── decision_authority/   # mnpi-decision-authority-agent (ID: 6736493888371949568)
 ├── sub_agents/
 │   ├── __init__.py
 │   ├── entities_agent.py     # SA1: Corporate names, tickers, project codenames
@@ -95,6 +101,7 @@ mnpi_adk_agent/
 │   └── public_check_agent.py # SA3: Press/SEC fact-check, linguistic secrecy markers
 └── tools/
     ├── __init__.py
+    ├── audit_tools.py        # BigQuery compliance audit recording tool
     ├── entity_tools.py       # Ticker resolution & confidential codename registry
     └── search_tools.py       # SEC/Wire search & secrecy phrase detection
 ```
@@ -253,7 +260,20 @@ gcloud iam service-accounts add-iam-policy-binding "github-actions-deployer@gree
 
 Once configured, any push to `main` (or manual dispatch via the Actions tab) will run the test suite and deploy the latest agent code to Vertex AI Agent Runtime.
 
-### 3. Live Deployed Instance
-- **Resource Name**: `projects/799321431260/locations/us-central1/reasoningEngines/5693910574635679744`
-- **Agent Engine ID**: `5693910574635679744`
-- **Vertex AI Console Playground**: [Open in Google Cloud Console](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/5693910574635679744/playground?project=799321431260)
+### 3. Live Deployed Agent Engine Instances
+The pipeline is published as two distinct reasoning engine agents on Vertex AI:
+1. **mnpi-fact-checker-agent**:
+   - **Resource Name**: `projects/799321431260/locations/us-central1/reasoningEngines/7905177991674593280`
+   - **Agent Engine ID**: `7905177991674593280`
+   - **Playground**: [Open Fact Checker Playground](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/7905177991674593280/playground?project=799321431260)
+2. **mnpi-decision-authority-agent**:
+   - **Resource Name**: `projects/799321431260/locations/us-central1/reasoningEngines/6736493888371949568`
+   - **Agent Engine ID**: `6736493888371949568`
+   - **Playground**: [Open Decision Authority Playground](https://console.cloud.google.com/vertex-ai/agents/agent-engines/locations/us-central1/agent-engines/6736493888371949568/playground?project=799321431260)
+
+### 4. BigQuery Document Alignment Audit Table
+- **Project**: `green-carrier-500109-k2`
+- **Dataset**: `mnpi_compliance_audit`
+- **Table**: `document_alignment_log`
+- **Full ID**: `green-carrier-500109-k2.mnpi_compliance_audit.document_alignment_log`
+- **Dashboard View**: Full interactive audit table rendered directly in the web dashboard (Section 4) with search, status filtering, SHA-256 integrity hashes, 4-test scores, and modal inspection.

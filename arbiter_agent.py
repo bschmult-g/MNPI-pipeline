@@ -24,12 +24,14 @@ from typing import Optional
 from google.adk.agents import Agent
 from config import settings
 from schemas import ArbiterVerdict
+from tools.audit_tools import record_document_alignment_in_bigquery
 
 ARBITER_SYSTEM_PROMPT = """You are the MPNI Agent Arbiter, the definitive Decision Authority for Material Non-Public Information compliance.
 
 YOUR ROLE:
 You receive communications or text chunks along with the factual findings from the MPNI Fact Checker Agent.
 Your responsibility is INSTRUCTIONAL and JUDICIAL. You strictly evaluate the evidence against the 4 mandatory Agent Assessment Criteria to render a legally grounded, defensible verdict.
+You can call `record_document_alignment_in_bigquery` to record the document name and arbitration results into the BigQuery compliance audit table.
 
 ================================================================================
 AGENT ASSESSMENT CRITERIA (THE 4 TESTS):
@@ -84,5 +86,6 @@ def create_arbiter_agent(model: Optional[str] = None) -> Agent:
         description="MPNI Decision Authority that applies the 4 Assessment Criteria to determine MNPI status.",
         instruction=ARBITER_SYSTEM_PROMPT,
         model=model or settings.arbiter_model,
+        tools=[record_document_alignment_in_bigquery],
         output_schema=ArbiterVerdict,
     )

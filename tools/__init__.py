@@ -8,10 +8,12 @@ from tools.search_tools import (
     detect_secrecy_markers,
     search_public_press_and_filings,
 )
+from tools.audit_tools import record_document_alignment_in_bigquery
 
 __all__ = [
     "check_restricted_or_internal_codename",
     "resolve_ticker_and_status",
     "search_public_press_and_filings",
     "detect_secrecy_markers",
+    "record_document_alignment_in_bigquery",
 ]

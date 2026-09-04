@@ -285,6 +285,77 @@
     </section>
   </main>
 
+  <!-- SECTION 4: BIGQUERY DOCUMENT ALIGNMENT AUDIT TABLE -->
+  <section class="audit-section-container">
+    <div class="audit-section-header">
+      <div class="audit-header-left">
+        <div class="step-indicator" style="background: linear-gradient(135deg, #10b981, #0284c7);">4</div>
+        <div>
+          <h2>BigQuery Document Alignment Audit Table</h2>
+          <p class="subtitle">Live compliance verification trail streamed to Google Cloud BigQuery (<code>green-carrier-500109-k2.mnpi_compliance_audit.document_alignment_log</code>)</p>
+        </div>
+      </div>
+      <div class="audit-header-right">
+        <div class="status-pill active" id="bq-status-pill">
+          <span class="status-dot"></span>
+          <span id="bq-status-text">BigQuery: Connected</span>
+        </div>
+        <button id="btn-refresh-audit" class="btn-secondary btn-sm">&#8635; Refresh Audit Logs</button>
+      </div>
+    </div>
+
+    <!-- AUDIT CONTROLS -->
+    <div class="audit-toolbar">
+      <div class="audit-search-box">
+        <input type="text" id="audit-search-input" class="form-input" placeholder="Search by document name, trigger, or hash...">
+      </div>
+      <div class="audit-filter-group">
+        <label class="field-label" style="margin: 0; align-self: center;">Filter Verdict:</label>
+        <select id="audit-verdict-filter" class="form-select">
+          <option value="ALL">All Verdicts</option>
+          <option value="MNPI_CONFIRMED">MNPI_CONFIRMED (Critical)</option>
+          <option value="POTENTIAL_MNPI">POTENTIAL_MNPI (High)</option>
+          <option value="CLEARED">CLEARED / PUBLIC (Low)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- AUDIT TABLE -->
+    <div class="audit-table-wrapper">
+      <table class="audit-table" id="audit-table">
+        <thead>
+          <tr>
+            <th>Timestamp (UTC)</th>
+            <th>Document Name</th>
+            <th>Channel</th>
+            <th>Arbiter Verdict</th>
+            <th>Recommended Action</th>
+            <th>4 Assessment Criteria Scores</th>
+            <th>Latency</th>
+            <th>Audit Hash</th>
+            <th>Inspect</th>
+          </tr>
+        </thead>
+        <tbody id="audit-table-body">
+          <tr>
+            <td colspan="9" class="audit-table-loading">Loading BigQuery audit records...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- AUDIT DETAIL MODAL -->
+  <div id="audit-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-doc-title">Document Alignment Audit Record</h3>
+        <button id="btn-close-modal" class="btn-close">&times;</button>
+      </div>
+      <div class="modal-body" id="modal-doc-body"></div>
+    </div>
+  </div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

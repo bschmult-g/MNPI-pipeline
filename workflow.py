@@ -522,17 +522,41 @@ Fact Checking Dossier:
     return ArbiterVerdict.model_validate_json(resp.text)
 
 
-def run_pipeline(text: str, force_live: bool = True) -> tuple[FactCheckingDossier, ArbiterVerdict]:
+def run_pipeline(
+    text: str,
+    force_live: bool = True,
+    document_name: Optional[str] = None,
+    channel: str = "quarantine_gcs",
+    log_to_bq: bool = False,
+) -> tuple[FactCheckingDossier, ArbiterVerdict]:
     """Runs the genuine end-to-end Fact Checker -> Arbiter compliance pipeline using Gemini 3.8 Flash.
     
-    No hardcoded heuristics: all analysis is generated in real time by Gemini 3.8 Flash in the US region.
+    1. Agent 1 (Fact Checker): Extracts entities, catalysts/triggers, and verifies public availability.
+    2. Agent 2 (Decision Authority): Evaluates 4 Assessment Criteria and renders binding verdict.
+    3. Optional: Automatically logs alignment and cryptographic hash to BigQuery.
     """
+    import time
+    start_t = time.perf_counter()
+
     client = get_genai_client() if force_live else None
     if client:
         try:
             logger.info(f"Executing Live Multi-Agent Pipeline via {settings.default_model} in region {settings.location}...")
             dossier = run_live_fact_checker(client, text)
             verdict = run_live_arbiter(client, text, dossier)
+            latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
+
+            if log_to_bq and document_name:
+                from audit_logger import log_document_alignment_to_bq
+                log_document_alignment_to_bq(
+                    document_name=document_name,
+                    verdict=verdict,
+                    channel=channel,
+                    latency_ms=latency_ms,
+                    raw_text=text,
+                    dossier=dossier,
+                )
+
             return dossier, verdict
         except Exception as e:
             logger.error(f"Live Gemini 3.8 Flash pipeline execution failed: {e}", exc_info=True)
@@ -542,5 +566,18 @@ def run_pipeline(text: str, force_live: bool = True) -> tuple[FactCheckingDossie
     logger.info("Executing offline fallback evaluator...")
     dossier = run_offline_fact_checker(text)
     verdict = run_offline_arbiter(dossier)
+    latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
+
+    if log_to_bq and document_name:
+        from audit_logger import log_document_alignment_to_bq
+        log_document_alignment_to_bq(
+            document_name=document_name,
+            verdict=verdict,
+            channel=channel,
+            latency_ms=latency_ms,
+            raw_text=text,
+            dossier=dossier,
+        )
+
     return dossier, verdict
 

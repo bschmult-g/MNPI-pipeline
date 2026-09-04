@@ -26,6 +26,13 @@ from pydantic import BaseModel, Field, constr
 
 from workflow import run_pipeline
 from schemas import ArbiterVerdict, FactCheckingDossier
+from audit_logger import (
+    log_document_alignment_to_bq,
+    fetch_document_alignment_logs,
+    get_bigquery_client,
+    get_table_full_id,
+)
+from config import settings
 
 logger = logging.getLogger("mnpi_demo")
 logging.basicConfig(level=logging.INFO)
@@ -472,6 +479,17 @@ def process_document(req: ProcessRequest):
 
     redaction_diff = perform_redaction_diff(req.text, verdict.redacted_text or req.text)
 
+    # Automatically stream compliance alignment record to BigQuery
+    doc_name = req.document_title or (os.path.basename(req.source_uri) if req.source_uri else "document.txt")
+    audit_res = log_document_alignment_to_bq(
+        document_name=doc_name,
+        verdict=verdict,
+        channel=req.channel,
+        latency_ms=latency_ms,
+        raw_text=req.text,
+        dossier=dossier,
+    )
+
     return {
         "status": "COMPLETED",
         "document_title": req.document_title,
@@ -488,6 +506,53 @@ def process_document(req: ProcessRequest):
         "verdict": verdict.model_dump(),
         "dossier": dossier.model_dump(),
         "redaction_diff": redaction_diff,
+        "audit": audit_res,
+    }
+
+
+# ==============================================================================
+# BigQuery Document Alignment Audit Endpoints
+# ==============================================================================
+
+@app.get("/api/audit/logs")
+def get_audit_logs(limit: int = 50):
+    """Retrieves document alignment audit records directly from Google Cloud BigQuery."""
+    records = fetch_document_alignment_logs(limit=limit)
+    return {
+        "project": settings.project_id,
+        "dataset": os.getenv("BIGQUERY_DATASET", "mnpi_compliance_audit"),
+        "table": os.getenv("BIGQUERY_TABLE", "document_alignment_log"),
+        "table_id": get_table_full_id(),
+        "count": len(records),
+        "records": records,
+    }
+
+
+@app.get("/api/audit/status")
+def get_audit_status():
+    """Checks BigQuery audit dataset and table connectivity and returns total record count."""
+    client = get_bigquery_client()
+    connected = client is not None
+    table_id = get_table_full_id(project=client.project if client else None)
+    total_count = 0
+
+    if client:
+        try:
+            query = f"SELECT count(1) as total FROM `{table_id}`"
+            rows = list(client.query(query).result())
+            if rows:
+                total_count = rows[0]["total"]
+        except Exception as e:
+            logger.debug(f"Audit status count check error: {e}")
+
+    return {
+        "connected": connected,
+        "project": client.project if client else settings.project_id,
+        "dataset": os.getenv("BIGQUERY_DATASET", "mnpi_compliance_audit"),
+        "table": os.getenv("BIGQUERY_TABLE", "document_alignment_log"),
+        "table_id": table_id,
+        "total_records": total_count,
+        "mode": "live_bigquery" if connected else "local_mirror",
     }
 
 

@@ -205,6 +205,54 @@ class TestDemoServer(unittest.TestCase):
         self.assertEqual(data["routing"]["badge_variant"], "critical")
         self.assertIn("Scoped Use", data["routing"]["destination"])
         self.assertTrue(data["redaction_diff"]["is_redacted"])
+        self.assertIn("audit", data)
+        self.assertTrue(data["audit"]["logged_to_bigquery"] or data["audit"]["status"] in ["COMPLETED", "RECORDED", "LOGGED_LOCALLY"])
+
+    def test_audit_api_endpoints(self):
+        """Validates BigQuery audit log status and query endpoints."""
+        status_resp = self.client.get("/api/audit/status")
+        self.assertEqual(status_resp.status_code, 200)
+        status_data = status_resp.json()
+        self.assertIn("dataset", status_data)
+        self.assertIn("table", status_data)
+        self.assertIn("total_records", status_data)
+
+        logs_resp = self.client.get("/api/audit/logs")
+        self.assertEqual(logs_resp.status_code, 200)
+        logs_data = logs_resp.json()
+        self.assertIn("records", logs_data)
+        self.assertGreaterEqual(len(logs_data["records"]), 1)
+
+
+class TestTwoAgentArchitectureAndAudit(unittest.TestCase):
+    """Test suite validating the 2 distinct agents and BigQuery audit function."""
+
+    def test_two_distinct_agent_apps(self):
+        """Validates that Fact Checker and Decision Authority exist as separate ADK Apps."""
+        import agents.fact_checker as fc
+        import agents.decision_authority as da
+
+        self.assertEqual(fc.app.name, "mnpi_fact_checker_agent")
+        self.assertEqual(fc.root_agent.name, "fact_checker_agent")
+        self.assertEqual(da.app.name, "mnpi_decision_authority_agent")
+        self.assertEqual(da.root_agent.name, "arbiter_agent")
+
+    def test_arbiter_has_audit_tool(self):
+        """Validates that Decision Authority Arbiter is equipped with the BigQuery audit tool."""
+        from arbiter_agent import create_arbiter_agent
+        arbiter = create_arbiter_agent()
+        tool_names = [getattr(t, "name", getattr(t, "__name__", str(t))) for t in arbiter.tools]
+        self.assertIn("record_document_alignment_in_bigquery", tool_names)
+
+    def test_bigquery_hash_computation(self):
+        """Validates SHA-256 tamper-evident hash generation."""
+        from audit_logger import compute_audit_hash
+        h1 = compute_audit_hash("memo1.txt", "Confidential text", "MNPI_CONFIRMED")
+        h2 = compute_audit_hash("memo1.txt", "Confidential text", "MNPI_CONFIRMED")
+        h3 = compute_audit_hash("memo1.txt", "Altered text", "MNPI_CONFIRMED")
+        self.assertTrue(h1.startswith("sha256:"))
+        self.assertEqual(h1, h2)
+        self.assertNotEqual(h1, h3)
 
 
 if __name__ == "__main__":

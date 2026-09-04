@@ -64,21 +64,11 @@ jobs:
           gcloud auth list
           echo "Current project: $(gcloud config get-value project)"
 
-      - name: Deploy Agent to Vertex AI Agent Runtime
+      - name: Deploy Both Agents to Vertex AI Agent Engine
         run: |
-          DEPLOY_REGION="${{ github.event.inputs.region || 'us' }}"
-          echo "Deploying MNPI Compliance Agent to Agent Runtime in project green-carrier-500109-k2 (Region: ${DEPLOY_REGION})..."
-
-          # Use valid Python identifier directory (no hyphens) for ADK agent package
-          STAGE_DIR="/tmp/mnpi_compliance_agent"
-          rm -rf "${STAGE_DIR}"
-          mkdir -p "${STAGE_DIR}"
-          cp -r . "${STAGE_DIR}/"
-          cd "${STAGE_DIR}"
-
-          adk deploy agent_engine . \
-            --project=green-carrier-500109-k2 \
-            --region="${DEPLOY_REGION}" \
-            --display_name="mnpi-compliance-agent" \
-            --description="Material Non-Public Information (MNPI) Compliance Decision Authority Agent" \
-            --otel_to_cloud
+          DEPLOY_REGION="${{ github.event.inputs.region || 'us-central1' }}"
+          echo "Deploying Two-Agent Pipeline to Agent Engine (Region: ${DEPLOY_REGION})..."
+          echo "Agent 1: mnpi-fact-checker-agent"
+          echo "Agent 2: mnpi-decision-authority-agent"
+          
+          python deploy_agents.py

@@ -1,0 +1,9 @@
+{
+  "display_name": "mnpi-fact-checker-agent",
+  "description": "MNPI Fact Checker Agent - Extracts entities, triggers, and verifies public availability",
+  "env_vars": {
+    "MNPI_DEFAULT_MODEL": "gemini-3.8-flash",
+    "GOOGLE_CLOUD_PROJECT": "green-carrier-500109-k2",
+    "GOOGLE_CLOUD_LOCATION": "us"
+  }
+}
