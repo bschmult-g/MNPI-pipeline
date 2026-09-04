@@ -3,8 +3,12 @@
   "description": "Material Non-Public Information (MNPI) Compliance Decision Authority Agent",
   "env_vars": {
     "MNPI_DEFAULT_MODEL": "gemini-3.8-flash",
-    "MNPI_ARBITER_MODEL": "gemini-3.8-flash",
-    "GOOGLE_CLOUD_PROJECT": "green-carrier-500109-k2",
-    "GOOGLE_CLOUD_LOCATION": "us"
-  }
+    "MNPI_ARBITER_MODEL": "gemini-3.8-flash"
+  },
+  "entrypoint_module": "agents.mnpi_adk_agent.agent",
+  "entrypoint_object": "runtime",
+  "requirements_file": "requirements.txt",
+  "extra_packages": [
+    "requirements.txt"
+  ]
 }

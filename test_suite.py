@@ -302,8 +302,54 @@ class TestTwoAgentArchitectureAndAudit(unittest.TestCase):
         self.assertEqual(h1, h2)
         self.assertNotEqual(h1, h3)
 
+    def test_agent1_fact_checker_runtime(self):
+        """Validates Agent 1 (Fact Checker) runtime execution and dossier output."""
+        from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+        fc = MNPIFactCheckerRuntime()
+        leak_text = "Project Titan acquiring Beta Corp next week for $3B."
+        dossier_dict = fc.query(text=leak_text)
+        self.assertIsInstance(dossier_dict, dict)
+        self.assertIn("entities", dossier_dict)
+        self.assertIn("triggers", dossier_dict)
+        self.assertIn("public_check", dossier_dict)
+        self.assertTrue(dossier_dict["high_risk_signals_present"])
+
+    def test_agent2_decision_authority_runtime_with_dossier(self):
+        """Validates Agent 2 (Decision Authority) runtime consuming Agent 1 dossier."""
+        from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+        from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+        fc = MNPIFactCheckerRuntime()
+        da = MNPIDecisionAuthorityRuntime()
+        text = "Don't tell anyone, but Project Titan is acquiring Beta Corp for $3B."
+        dossier_dict = fc.query(text=text)
+        verdict_dict = da.query(text=text, dossier=dossier_dict, log_to_bq=False)
+        self.assertIsInstance(verdict_dict, dict)
+        self.assertEqual(verdict_dict["verdict"], "MNPI_CONFIRMED")
+        self.assertEqual(verdict_dict["risk_level"], "CRITICAL")
+        self.assertIn("materiality_test", verdict_dict)
+
+    def test_agent2_decision_authority_runtime_standalone(self):
+        """Validates Agent 2 standalone execution autonomously invoking Agent 1 when dossier is None."""
+        from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+        da = MNPIDecisionAuthorityRuntime()
+        text = "Target announced quarterly earnings on CNBC yesterday."
+        verdict_dict = da.query(text=text, dossier=None, log_to_bq=False)
+        self.assertIsInstance(verdict_dict, dict)
+        self.assertEqual(verdict_dict["verdict"], "CLEARED")
+
+    def test_run_two_agent_pipeline_handoff(self):
+        """Validates sequential two-agent pipeline with explicit results handoff."""
+        from workflow import run_two_agent_pipeline
+        text = "Project Apollo launch scheduled for next month."
+        dossier, verdict = run_two_agent_pipeline(text, log_to_bq=False)
+        self.assertIsNotNone(dossier)
+        self.assertIsNotNone(verdict)
+        self.assertIn("entities", dossier.model_dump())
+        self.assertIn("materiality_test", verdict.model_dump())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
 
 

@@ -522,6 +522,58 @@ Fact Checking Dossier:
     return ArbiterVerdict.model_validate_json(resp.text)
 
 
+def run_two_agent_pipeline(
+    text: str,
+    document_name: Optional[str] = None,
+    channel: str = "quarantine_gcs",
+    log_to_bq: bool = False,
+    force_live: bool = True,
+) -> tuple[FactCheckingDossier, ArbiterVerdict]:
+    """Executes the two distinct agent runtimes sequentially with explicit payload handoff.
+    
+    1. Agent 1 (mnpi-fact-checker-agent):
+       Coordinates sub-agents (entities SA1, triggers SA2, public check SA3)
+       and callable tools. Synthesizes a FactCheckingDossier.
+       
+    2. Results Transmission (Handoff):
+       Agent 1 hands off the complete FactCheckingDossier payload to Agent 2.
+       
+    3. Agent 2 (mnpi-decision-authority-agent):
+       Receives original text AND Agent 1's FactCheckingDossier results.
+       Applies the 4 mandatory legal Assessment Criteria (Basic Inc., Mosaic, Dirks, Harm).
+       Invokes BigQuery audit tool and renders binding ArbiterVerdict.
+    """
+    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+    from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+
+    fc_runtime = MNPIFactCheckerRuntime(
+        project_id=settings.project_id,
+        location=settings.location,
+        model=settings.default_model,
+    )
+    da_runtime = MNPIDecisionAuthorityRuntime(
+        project_id=settings.project_id,
+        location=settings.location,
+        model=settings.arbiter_model,
+    )
+
+    logger.info("Executing Agent 1 (mnpi-fact-checker-agent) flow...")
+    dossier_dict = fc_runtime.query(text)
+    dossier = FactCheckingDossier.model_validate(dossier_dict)
+
+    logger.info("Agent 1 flow completed. Transmitting results payload to Agent 2 (mnpi-decision-authority-agent)...")
+    verdict_dict = da_runtime.query(
+        text=text,
+        dossier=dossier_dict,
+        document_name=document_name or "unspecified",
+        channel=channel,
+        log_to_bq=log_to_bq,
+    )
+    verdict = ArbiterVerdict.model_validate(verdict_dict)
+
+    return dossier, verdict
+
+
 def run_pipeline(
     text: str,
     force_live: bool = True,
@@ -529,55 +581,12 @@ def run_pipeline(
     channel: str = "quarantine_gcs",
     log_to_bq: bool = False,
 ) -> tuple[FactCheckingDossier, ArbiterVerdict]:
-    """Runs the genuine end-to-end Fact Checker -> Arbiter compliance pipeline using Gemini 3.8 Flash.
-    
-    1. Agent 1 (Fact Checker): Extracts entities, catalysts/triggers, and verifies public availability.
-    2. Agent 2 (Decision Authority): Evaluates 4 Assessment Criteria and renders binding verdict.
-    3. Optional: Automatically logs alignment and cryptographic hash to BigQuery.
-    """
-    import time
-    start_t = time.perf_counter()
-
-    client = get_genai_client() if force_live else None
-    if client:
-        try:
-            logger.info(f"Executing Live Multi-Agent Pipeline via {settings.default_model} in region {settings.location}...")
-            dossier = run_live_fact_checker(client, text)
-            verdict = run_live_arbiter(client, text, dossier)
-            latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
-
-            if log_to_bq and document_name:
-                from audit_logger import log_document_alignment_to_bq
-                log_document_alignment_to_bq(
-                    document_name=document_name,
-                    verdict=verdict,
-                    channel=channel,
-                    latency_ms=latency_ms,
-                    raw_text=text,
-                    dossier=dossier,
-                )
-
-            return dossier, verdict
-        except Exception as e:
-            logger.error(f"Live Gemini 3.8 Flash pipeline execution failed: {e}", exc_info=True)
-            raise e
-
-    # Fallback to offline evaluator only if explicitly offline or testing
-    logger.info("Executing offline fallback evaluator...")
-    dossier = run_offline_fact_checker(text)
-    verdict = run_offline_arbiter(dossier)
-    latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
-
-    if log_to_bq and document_name:
-        from audit_logger import log_document_alignment_to_bq
-        log_document_alignment_to_bq(
-            document_name=document_name,
-            verdict=verdict,
-            channel=channel,
-            latency_ms=latency_ms,
-            raw_text=text,
-            dossier=dossier,
-        )
-
-    return dossier, verdict
+    """Compatibility wrapper delegating directly to the Two-Agent Pipeline."""
+    return run_two_agent_pipeline(
+        text=text,
+        document_name=document_name,
+        channel=channel,
+        log_to_bq=log_to_bq,
+        force_live=force_live,
+    )
 

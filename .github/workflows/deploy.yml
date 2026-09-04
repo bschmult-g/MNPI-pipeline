@@ -10,14 +10,14 @@ on:
       - '.gitignore'
   workflow_dispatch:
     inputs:
+      target:
+        description: 'Agents to update in-place (all, pipeline, compliance, fact-checker, decision-authority)'
+        required: false
+        default: 'all'
       region:
         description: 'Google Cloud region for Agent Runtime deployment'
         required: false
-        default: 'us'
-      agent_engine_id:
-        description: 'Existing Agent Engine / Runtime ID to update (leave blank to create a new instance)'
-        required: false
-        default: ''
+        default: 'us-central1'
 
 permissions:
   contents: read
@@ -64,11 +64,17 @@ jobs:
         run: |
           python test_suite.py
 
-      - name: Deploy Both Agents to Vertex AI Agent Engine
+      - name: Deploy Agents to Vertex AI Agent Engine (In-Place Update)
         run: |
           DEPLOY_REGION="${{ github.event.inputs.region || 'us-central1' }}"
-          echo "Deploying Two-Agent Pipeline to Agent Engine (Region: ${DEPLOY_REGION})..."
-          echo "Agent 1: mnpi-fact-checker-agent"
-          echo "Agent 2: mnpi-decision-authority-agent"
+          DEPLOY_TARGET="${{ github.event.inputs.target || 'pipeline' }}"
+          echo "======================================================="
+          echo "🚀 Updating Vertex AI Agent Engine instances IN-PLACE..."
+          echo "   Target:             ${DEPLOY_TARGET}"
+          echo "   Compliance Agent:   5693910574635679744"
+          echo "   Fact Checker Agent: 9003774825776283648"
+          echo "   Decision Authority: 6736493888371949568"
+          echo "   Region:             ${DEPLOY_REGION}"
+          echo "======================================================="
           
-          python deploy_agents.py
+          python deploy_agents.py --target="${DEPLOY_TARGET}" --location="${DEPLOY_REGION}"

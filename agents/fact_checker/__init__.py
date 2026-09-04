@@ -1,4 +1,11 @@
 """MNPI Fact Checker Agent Package."""
-from .agent import app, root_agent
+from agents.fact_checker.runtime import MNPIFactCheckerRuntime
 
-__all__ = ["app", "root_agent"]
+try:
+    from .agent import app, root_agent
+except Exception:
+    app, root_agent = None, None
+
+__all__ = ["MNPIFactCheckerRuntime", "app", "root_agent"]
+
+

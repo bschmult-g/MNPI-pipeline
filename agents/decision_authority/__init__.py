@@ -1,4 +1,11 @@
 """MNPI Decision Authority Agent Package."""
-from .agent import app, root_agent
+from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
 
-__all__ = ["app", "root_agent"]
+try:
+    from .agent import app, root_agent
+except Exception:
+    app, root_agent = None, None
+
+__all__ = ["MNPIDecisionAuthorityRuntime", "app", "root_agent"]
+
+
