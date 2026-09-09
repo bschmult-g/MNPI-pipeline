@@ -212,6 +212,7 @@ def log_document_alignment_to_bq(
         logger.debug(f"Local audit log mirror notice: {local_err}")
 
     return {
+        "status": "RECORDED" if bq_logged else "LOGGED_LOCALLY",
         "logged_to_bigquery": bq_logged,
         "table_id": table_id,
         "audit_hash": audit_hash,

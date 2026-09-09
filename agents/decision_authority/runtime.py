@@ -93,7 +93,11 @@ class MNPIDecisionAuthorityRuntime:
 
         client = get_genai_client()
         if client:
-            verdict = run_live_arbiter(client, document_text, parsed_dossier)
+            try:
+                verdict = run_live_arbiter(client, document_text, parsed_dossier)
+            except Exception as err:
+                logger.warning(f"Live Arbiter execution notice ({err}); using deterministic arbiter fallback.")
+                verdict = run_offline_arbiter(parsed_dossier)
         else:
             verdict = run_offline_arbiter(parsed_dossier)
 

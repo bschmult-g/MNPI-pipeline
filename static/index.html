@@ -75,8 +75,8 @@
         <div id="drop-zone" class="drop-zone">
           <div class="drop-icon">&#128196;</div>
           <p class="drop-text">Drag &amp; drop document or click to browse</p>
-          <p class="drop-hint">Supported: .txt, .json, .eml, .csv, .md, .log (Max 5MB)</p>
-          <input type="file" id="file-input" class="file-input-hidden" accept=".txt,.json,.eml,.csv,.md,.log,.transcript">
+          <p class="drop-hint">Supported: .txt, .pdf, .docx, .doc, .eml, .csv, .json (Max 15MB)</p>
+          <input type="file" id="file-input" class="file-input-hidden" accept=".txt,.json,.md,.eml,.csv,.log,.transcript,.pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword">
         </div>
         <div id="upload-status" class="upload-status-box hidden"></div>
       </div>
@@ -100,8 +100,8 @@
           <div id="gcs-drop-zone" class="drop-zone gcs-drop-zone">
             <div class="drop-icon" style="font-size: 1.5rem; margin-bottom: 0.25rem;">&#9729;</div>
             <p class="drop-text">Upload Document to GCS Bucket</p>
-            <p class="drop-hint">Saves to incoming/ prefix in Cloud Storage (Max 5MB)</p>
-            <input type="file" id="gcs-file-input" class="file-input-hidden" accept=".txt,.json,.eml,.csv,.md,.log,.transcript">
+            <p class="drop-hint">Saves to incoming/ prefix in Cloud Storage (Max 15MB)</p>
+            <input type="file" id="gcs-file-input" class="file-input-hidden" accept=".txt,.json,.md,.eml,.csv,.log,.transcript,.pdf,.docx,.doc,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword">
           </div>
           <div id="gcs-upload-status" class="upload-status-box hidden"></div>
         </div>

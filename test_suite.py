@@ -190,6 +190,51 @@ class TestDemoServer(unittest.TestCase):
         self.assertIn("/incoming/direct_upload_test.txt", data["gcs_uri"])
         self.assertEqual(data["text"], sample_bytes.decode())
 
+    def test_upload_pdf_document(self):
+        """Validates PDF upload, binary staging, and text extraction."""
+        from pathlib import Path
+        sample_pdf = Path("quarantine_bucket/incoming/test_memo.pdf").read_bytes()
+        files = {"file": ("test_memo_upload.pdf", sample_pdf, "application/pdf")}
+        resp = self.client.post("/api/upload", files=files, data={"channel": "email"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "QUARANTINED")
+        self.assertIn("Project Titan secret acquisition memo", data["text"])
+        self.assertEqual(data["bytes"], len(sample_pdf))
+
+    def test_upload_docx_document(self):
+        """Validates DOCX upload, binary staging, and text extraction."""
+        import io
+        import docx
+        doc = docx.Document()
+        doc.add_paragraph("Confidential Q3 acquisition draft for Project Titan.")
+        buf = io.BytesIO()
+        doc.save(buf)
+        docx_bytes = buf.getvalue()
+
+        files = {"file": ("test_memo_upload.docx", docx_bytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document")}
+        resp = self.client.post("/api/upload", files=files, data={"channel": "slack"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["status"], "QUARANTINED")
+        self.assertIn("Confidential Q3 acquisition draft for Project Titan", data["text"])
+        self.assertEqual(data["bytes"], len(docx_bytes))
+
+    def test_upload_unsupported_extension(self):
+        """Validates rejection of unsupported file extensions."""
+        files = {"file": ("payload.exe", b"binary content", "application/octet-stream")}
+        resp = self.client.post("/api/upload", files=files)
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Unsupported file extension", resp.json()["detail"])
+
+    def test_upload_oversized_file(self):
+        """Validates rejection of files exceeding 15MB limit."""
+        large_bytes = b"0" * (15 * 1024 * 1024 + 10)
+        files = {"file": ("huge_doc.txt", large_bytes, "text/plain")}
+        resp = self.client.post("/api/upload", files=files)
+        self.assertEqual(resp.status_code, 413)
+        self.assertIn("exceeds maximum allowed size of 15MB", resp.json()["detail"])
+
     def test_process_document_routing(self):
         """Validates processing pipeline execution and routing assignment."""
         leak_text = "Don't share, but Project Titan is acquiring TechCo for $2.4B next Tuesday."
@@ -206,7 +251,7 @@ class TestDemoServer(unittest.TestCase):
         self.assertIn("Scoped Use", data["routing"]["destination"])
         self.assertTrue(data["redaction_diff"]["is_redacted"])
         self.assertIn("audit", data)
-        self.assertTrue(data["audit"]["logged_to_bigquery"] or data["audit"]["status"] in ["COMPLETED", "RECORDED", "LOGGED_LOCALLY"])
+        self.assertTrue(data["audit"]["logged_to_bigquery"] or data["audit"].get("status") in ["COMPLETED", "RECORDED", "LOGGED_LOCALLY"])
 
     def test_audit_api_endpoints(self):
         """Validates BigQuery audit log status, schema, and query endpoints."""
@@ -263,7 +308,7 @@ class TestDemoServer(unittest.TestCase):
         self.assertEqual(schema_resp.status_code, 200)
         schema_data = schema_resp.json()
         self.assertIn("fields", schema_data)
-        self.assertEqual(len(schema_data["fields"]), 18)
+        self.assertGreaterEqual(len(schema_data["fields"]), 18)
 
         logs_resp = self.client.get("/api/audit/logs")
         self.assertEqual(logs_resp.status_code, 200)

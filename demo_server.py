@@ -12,6 +12,8 @@ Compliant with secure web coding standards:
 
 from __future__ import annotations
 
+import io
+import mimetypes
 import os
 import re
 import time
@@ -23,6 +25,18 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, constr
+
+try:
+    from pypdf import PdfReader
+    _HAS_PYPDF = True
+except ImportError:
+    _HAS_PYPDF = False
+
+try:
+    import docx
+    _HAS_DOCX = True
+except ImportError:
+    _HAS_DOCX = False
 
 from workflow import run_pipeline
 from schemas import ArbiterVerdict, FactCheckingDossier
@@ -217,22 +231,167 @@ def get_storage_client(project_id: Optional[str] = None):
     return None
 
 
+def extract_text_from_pdf(content_bytes: bytes) -> str:
+    """Extracts text content from a PDF document using pypdf."""
+    if not _HAS_PYPDF:
+        raise HTTPException(
+            status_code=500,
+            detail="PDF text extraction is unavailable because 'pypdf' is not installed."
+        )
+    try:
+        reader = PdfReader(io.BytesIO(content_bytes))
+        pages_text = []
+        for idx, page in enumerate(reader.pages):
+            page_text = page.extract_text() or ""
+            stripped = page_text.strip()
+            if stripped:
+                pages_text.append(stripped)
+        text = "\n\n".join(pages_text).strip()
+        if not text:
+            raise ValueError(
+                "No readable text could be extracted from this PDF. "
+                "Note: Image-only or scanned PDFs require OCR before processing."
+            )
+        return text
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF document: {e}")
+
+
+def extract_text_from_docx(content_bytes: bytes) -> str:
+    """Extracts text content from a Microsoft Word (.docx) document."""
+    if not _HAS_DOCX:
+        raise HTTPException(
+            status_code=500,
+            detail="DOCX text extraction is unavailable because 'python-docx' is not installed."
+        )
+    try:
+        doc = docx.Document(io.BytesIO(content_bytes))
+        parts = []
+        for p in doc.paragraphs:
+            stripped = p.text.strip()
+            if stripped:
+                parts.append(stripped)
+        for table in doc.tables:
+            for row in table.rows:
+                row_cells = [c.text.strip() for c in row.cells if c.text.strip()]
+                if row_cells:
+                    parts.append(" | ".join(row_cells))
+        text = "\n\n".join(parts).strip()
+        if not text:
+            raise ValueError("No readable text found in DOCX document.")
+        return text
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse DOCX document: {e}")
+
+
+def extract_text_from_doc(content_bytes: bytes) -> str:
+    """Extracts text from legacy Microsoft Word (.doc), RTF, or disguised docx files."""
+    # 1. If it is actually a docx file saved with .doc extension (PK zip signature)
+    if content_bytes.startswith(b"PK\x03\x04") and _HAS_DOCX:
+        try:
+            return extract_text_from_docx(content_bytes)
+        except Exception:
+            pass
+
+    # 2. If it is an RTF document saved with .doc extension
+    if content_bytes.startswith(b"{\\rtf"):
+        try:
+            raw = content_bytes.decode("latin-1", errors="ignore")
+            clean = re.sub(r"\\[a-zA-Z]+(-?\d+)? ?", " ", raw)
+            clean = re.sub(r"[{}\\;\r]", "", clean)
+            lines = [line.strip() for line in clean.splitlines() if line.strip()]
+            if lines:
+                return "\n".join(lines)
+        except Exception:
+            pass
+
+    # 3. Binary OLE WordDocument stream text extraction
+    extracted_segments = []
+
+    # Extract UTF-16LE text sequences (standard for Word 97-2003 text)
+    utf16_runs = re.findall(b"(?:[\x20-\x7e\x09\x0a\x0d]\x00){4,}", content_bytes)
+    for run in utf16_runs:
+        try:
+            val = run.decode("utf-16le", errors="ignore").strip()
+            if val and not any(val.startswith(meta) for meta in [
+                "Microsoft", "Normal.dot", "Title", "Subject", "Author",
+                "Keywords", "Comments", "Template", "Header", "Footer",
+                "Times New Roman", "Calibri", "Arial"
+            ]):
+                if len(val) >= 4:
+                    extracted_segments.append(val)
+        except Exception:
+            pass
+
+    # Extract ASCII text sequences
+    ascii_runs = re.findall(b"[\x20-\x7e\x09\x0a\x0d]{6,}", content_bytes)
+    for run in ascii_runs:
+        try:
+            val = run.decode("ascii", errors="ignore").strip()
+            if val and not re.match(r"^[_\-\.0-9a-fA-F]+$", val):
+                if not any(val.startswith(meta) for meta in [
+                    "CompObj", "WordDocument", "SummaryInformation",
+                    "DocumentSummaryInformation", "Table", "Microsoft"
+                ]):
+                    extracted_segments.append(val)
+        except Exception:
+            pass
+
+    if extracted_segments:
+        seen = set()
+        unique = []
+        for s in extracted_segments:
+            if s not in seen:
+                seen.add(s)
+                unique.append(s)
+        return "\n\n".join(unique)
+
+    # 4. Fallback: try raw UTF-8 decoding
+    try:
+        decoded = content_bytes.decode("utf-8", errors="replace")
+        printable = "".join(c for c in decoded if c.isprintable() or c in "\n\r\t").strip()
+        if len(printable) > 20:
+            return printable
+    except Exception:
+        pass
+
+    raise HTTPException(
+        status_code=400,
+        detail="Unable to extract readable text from .doc file. Please convert to .docx or .pdf."
+    )
+
+
 def _read_and_validate_file(safe_name: str, content_bytes: bytes) -> str:
-    """Validates file extension and size, then returns decoded UTF-8 string."""
-    allowed_extensions = {".txt", ".json", ".md", ".eml", ".csv", ".log", ".transcript"}
+    """Validates file extension and size, then extracts clean text."""
+    allowed_extensions = {
+        ".txt", ".json", ".md", ".eml", ".csv", ".log", ".transcript",
+        ".pdf", ".docx", ".doc",
+    }
     ext = Path(safe_name).suffix.lower()
     if ext not in allowed_extensions:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file extension '{ext}'. Allowed: {sorted(allowed_extensions)}"
         )
-    max_bytes = 5 * 1024 * 1024
+    max_bytes = 15 * 1024 * 1024  # 15MB limit for rich documents (PDF/DOCX)
     if len(content_bytes) > max_bytes:
-        raise HTTPException(status_code=413, detail="File exceeds maximum allowed size of 5MB")
-    try:
-        return content_bytes.decode("utf-8", errors="replace")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Unable to decode text content: {e}")
+        raise HTTPException(status_code=413, detail="File exceeds maximum allowed size of 15MB")
+
+    if ext == ".pdf":
+        return extract_text_from_pdf(content_bytes)
+    elif ext == ".docx":
+        return extract_text_from_docx(content_bytes)
+    elif ext == ".doc":
+        return extract_text_from_doc(content_bytes)
+    else:
+        try:
+            return content_bytes.decode("utf-8", errors="replace")
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Unable to decode text content: {e}")
 
 
 @app.get("/api/bucket/status")
@@ -334,14 +493,18 @@ def fetch_from_storage_bucket(req: FetchBucketRequest):
                 b = client.bucket(bucket_name)
                 blob = b.blob(blob_name)
                 if blob.exists():
-                    content = blob.download_as_text()
+                    raw_bytes = blob.download_as_bytes()
+                    safe_name = sanitize_filename(os.path.basename(blob_name))
+                    content = _read_and_validate_file(safe_name, raw_bytes)
                     return {
                         "source": "live_gcs",
                         "gcs_uri": uri,
-                        "filename": os.path.basename(blob_name),
+                        "filename": safe_name,
                         "content": content,
-                        "bytes": len(content.encode("utf-8")),
+                        "bytes": len(raw_bytes),
                     }
+            except HTTPException:
+                raise
             except Exception as gcs_err:
                 logger.info(f"Live GCS fetch attempt for {uri} failed: {gcs_err}")
 
@@ -351,14 +514,17 @@ def fetch_from_storage_bucket(req: FetchBucketRequest):
     local_target = QUARANTINE_DIR / sanitized
     if local_target.exists():
         try:
-            content = local_target.read_text(encoding="utf-8", errors="replace")
+            raw_bytes = local_target.read_bytes()
+            content = _read_and_validate_file(sanitized, raw_bytes)
             return {
                 "source": "simulated_gcs",
                 "gcs_uri": uri,
                 "filename": sanitized,
                 "content": content,
-                "bytes": len(content.encode("utf-8")),
+                "bytes": len(raw_bytes),
             }
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to read file from storage: {e}")
 
@@ -375,20 +541,22 @@ async def upload_to_bucket(
 ):
     """Uploads a document directly to the GCS quarantine bucket (incoming/) and mirrors locally."""
     safe_name = sanitize_filename(file.filename or "uploaded_doc.txt")
-    max_bytes = 5 * 1024 * 1024
+    max_bytes = 15 * 1024 * 1024
     content_bytes = await file.read(max_bytes + 1)
     text = _read_and_validate_file(safe_name, content_bytes)
 
     target_bucket = bucket or os.getenv("GCS_QUARANTINE_BUCKET", DEFAULT_GCS_BUCKET)
     gcs_uploaded = False
     gcs_uri = f"gs://{target_bucket}/incoming/{safe_name}"
+    guessed_type, _ = mimetypes.guess_type(safe_name)
+    content_type = file.content_type or guessed_type or "application/octet-stream"
 
     client = get_storage_client()
     if client:
         try:
             b = client.bucket(target_bucket)
             blob = b.blob(f"incoming/{safe_name}")
-            blob.upload_from_string(content_bytes, content_type=file.content_type or "text/plain")
+            blob.upload_from_string(content_bytes, content_type=content_type)
             gcs_uploaded = True
             logger.info(f"Successfully uploaded {safe_name} to live GCS {gcs_uri}")
         except Exception as e:
@@ -396,7 +564,7 @@ async def upload_to_bucket(
 
     # Mirror to local directory
     dest_path = QUARANTINE_DIR / safe_name
-    dest_path.write_text(text, encoding="utf-8")
+    dest_path.write_bytes(content_bytes)
 
     return {
         "status": "QUARANTINED",
@@ -417,27 +585,29 @@ async def upload_document(
 ):
     """Receives a document upload, validates it, and stages it into GCS and Quarantine."""
     safe_name = sanitize_filename(file.filename or "uploaded.txt")
-    max_bytes = 5 * 1024 * 1024
+    max_bytes = 15 * 1024 * 1024
     content_bytes = await file.read(max_bytes + 1)
     text = _read_and_validate_file(safe_name, content_bytes)
 
     target_bucket = os.getenv("GCS_QUARANTINE_BUCKET", DEFAULT_GCS_BUCKET)
     gcs_uploaded = False
     gcs_uri = f"gs://{target_bucket}/incoming/{safe_name}"
+    guessed_type, _ = mimetypes.guess_type(safe_name)
+    content_type = file.content_type or guessed_type or "application/octet-stream"
 
     client = get_storage_client()
     if client:
         try:
             b = client.bucket(target_bucket)
             blob = b.blob(f"incoming/{safe_name}")
-            blob.upload_from_string(content_bytes, content_type=file.content_type or "text/plain")
+            blob.upload_from_string(content_bytes, content_type=content_type)
             gcs_uploaded = True
         except Exception as e:
             logger.warning(f"Live GCS upload fallback: {e}")
 
     # Save to local quarantine
     dest_path = QUARANTINE_DIR / safe_name
-    dest_path.write_text(text, encoding="utf-8")
+    dest_path.write_bytes(content_bytes)
 
     return {
         "status": "QUARANTINED",

@@ -67,7 +67,11 @@ class MNPIFactCheckerRuntime:
 
         client = get_genai_client()
         if client:
-            dossier = run_live_fact_checker(client, document_text)
+            try:
+                dossier = run_live_fact_checker(client, document_text)
+            except Exception as err:
+                logger.warning(f"Live Fact Checker execution notice ({err}); using deterministic analyzer fallback.")
+                dossier = run_offline_fact_checker(document_text)
         else:
             dossier = run_offline_fact_checker(document_text)
 
