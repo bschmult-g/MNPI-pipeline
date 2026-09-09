@@ -24,6 +24,8 @@ class MNPIDecisionAuthorityRuntime:
     - Renders the definitive ArbiterVerdict.
     """
 
+    agent_framework: str = "google-adk"
+
     def __init__(
         self,
         project_id: str = "green-carrier-500109-k2",
@@ -33,6 +35,7 @@ class MNPIDecisionAuthorityRuntime:
         self.project_id = project_id
         self.location = location
         self.model = model
+        self.agent_framework = "google-adk"
 
     def set_up(self):
         """Initializes runtime environment upon Vertex AI container startup."""

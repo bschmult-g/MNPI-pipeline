@@ -180,14 +180,55 @@ def _deploy_adk_agent(
     return resource_name
 
 
+def _update_package_spec_agent(
+    agent_id: str,
+    agent_runtime: Any,
+    display_name: str,
+    description: str,
+    env_vars: Dict[str, str],
+    project_id: str = PROJECT_ID,
+    location: str = LOCATION,
+) -> str:
+    """Updates a ReasoningEngine instance created with spec.package_spec in-place,
+    registering google-adk framework and enabling Cloud Telemetry."""
+    resource_name = f"projects/{project_id}/locations/{location}/reasoningEngines/{agent_id}"
+    logger.info(f"🔄 Updating {display_name} IN-PLACE: {resource_name} via Agent Engine API (google-adk + Telemetry)...")
+    _setup_adk_deployment_env(project_id)
+
+    client = vertexai.Client(project=project_id, location=location)
+    config = {
+        "display_name": display_name,
+        "description": description,
+        "requirements": REQUIREMENTS,
+        "extra_packages": EXTRA_PACKAGES,
+        "staging_bucket": STAGING_BUCKET,
+        "agent_framework": "google-adk",
+        "env_vars": env_vars,
+    }
+
+    client.agent_engines.update(
+        name=resource_name,
+        agent=agent_runtime,
+        config=config,
+    )
+    logger.info(f"✅ In-place update complete for {display_name}: {resource_name}")
+    return resource_name
+
+
 def update_fact_checker(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
     """Updates Agent 1 (Fact Checker: 7905177991674593280) in-place with google-adk, A2A, and Cloud Telemetry."""
-    return _deploy_adk_agent(
-        agent_folder="agents/fact_checker",
-        agent_engine_id=FACT_CHECKER_ID,
+    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+    fc_runtime = MNPIFactCheckerRuntime(project_id=project_id, location="us", model="gemini-3.8-flash")
+    return _update_package_spec_agent(
+        agent_id=FACT_CHECKER_ID,
+        agent_runtime=fc_runtime,
         display_name="mnpi-fact-checker-agent",
         description="Material Non-Public Information (MNPI) Fact Checker Agent - Extracts entities, triggers, and verifies public mosaic status",
-        extra_packages=ADK_EXTRA_PACKAGES,
+        env_vars={
+            "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
+            "GOOGLE_CLOUD_LOCATION": "us",
+            "MNPI_DEFAULT_MODEL": "gemini-3.8-flash",
+        },
         project_id=project_id,
         location=location,
     )
@@ -195,12 +236,18 @@ def update_fact_checker(project_id: str = PROJECT_ID, location: str = LOCATION) 
 
 def update_decision_authority(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
     """Updates Agent 2 (Decision Authority: 6736493888371949568) in-place with google-adk, A2A, and Cloud Telemetry."""
-    return _deploy_adk_agent(
-        agent_folder="agents/decision_authority",
-        agent_engine_id=DECISION_AUTHORITY_ID,
+    from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+    da_runtime = MNPIDecisionAuthorityRuntime(project_id=project_id, location="us", model="gemini-3.8-flash")
+    return _update_package_spec_agent(
+        agent_id=DECISION_AUTHORITY_ID,
+        agent_runtime=da_runtime,
         display_name="mnpi-decision-authority-agent",
         description="Material Non-Public Information (MNPI) Decision Authority Arbiter - Applies 4 Assessment Criteria for binding compliance verdict",
-        extra_packages=ADK_EXTRA_PACKAGES,
+        env_vars={
+            "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
+            "GOOGLE_CLOUD_LOCATION": "us",
+            "MNPI_ARBITER_MODEL": "gemini-3.8-flash",
+        },
         project_id=project_id,
         location=location,
     )

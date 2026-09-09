@@ -25,6 +25,8 @@ class MNPIFactCheckerRuntime:
     - Outputs a synthesized FactCheckingDossier ready for handoff to Agent 2.
     """
 
+    agent_framework: str = "google-adk"
+
     def __init__(
         self,
         project_id: str = "green-carrier-500109-k2",
@@ -34,6 +36,7 @@ class MNPIFactCheckerRuntime:
         self.project_id = project_id
         self.location = location
         self.model = model
+        self.agent_framework = "google-adk"
 
     def set_up(self):
         """Initializes runtime environment upon Vertex AI container startup."""
