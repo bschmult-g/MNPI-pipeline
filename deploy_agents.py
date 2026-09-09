@@ -120,6 +120,18 @@ def _setup_adk_deployment_env(project_id: str):
     from vertexai._genai.types import common
     common.AgentEngineConfig.model_config["extra"] = "allow"
 
+    from vertexai._genai import agent_engines
+    orig_update = agent_engines.AgentEngines.update
+
+    def safe_update(self, *args, **kwargs):
+        config = kwargs.get("config")
+        if isinstance(config, dict) and "image_spec" in config:
+            for forbidden_key in ("entrypoint_module", "entrypoint_object", "requirements_file"):
+                config.pop(forbidden_key, None)
+        return orig_update(self, *args, **kwargs)
+
+    agent_engines.AgentEngines.update = safe_update
+
     token = None
     if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
         try:
@@ -158,10 +170,8 @@ def _deploy_adk_agent(
         region=location,
         agent_engine_id=agent_engine_id,
         otel_to_cloud=True,
-        trace_to_cloud=True,
         display_name=display_name,
         description=description,
-        requirements_file="requirements.txt",
         extra_packages=extra_packages,
     )
 

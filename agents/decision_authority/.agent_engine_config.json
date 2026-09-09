@@ -5,8 +5,5 @@
     "MNPI_ARBITER_MODEL": "gemini-3.8-flash",
     "GOOGLE_CLOUD_LOCATION": "us",
     "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true"
-  },
-  "entrypoint_module": "agents.decision_authority.agent",
-  "entrypoint_object": "runtime",
-  "requirements_file": "requirements.txt"
+  }
 }
