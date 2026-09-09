@@ -217,18 +217,12 @@ def _update_package_spec_agent(
 
 def update_fact_checker(project_id: str = PROJECT_ID, location: str = LOCATION) -> str:
     """Updates Agent 1 (Fact Checker: 7905177991674593280) in-place with google-adk, A2A, and Cloud Telemetry."""
-    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
-    fc_runtime = MNPIFactCheckerRuntime(project_id=project_id, location="us", model="gemini-3.8-flash")
-    return _update_package_spec_agent(
-        agent_id=FACT_CHECKER_ID,
-        agent_runtime=fc_runtime,
+    return _deploy_adk_agent(
+        agent_folder="agents/fact_checker",
+        agent_engine_id=FACT_CHECKER_ID,
         display_name="mnpi-fact-checker-agent",
         description="Material Non-Public Information (MNPI) Fact Checker Agent - Extracts entities, triggers, and verifies public mosaic status",
-        env_vars={
-            "GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY": "true",
-            "GOOGLE_CLOUD_LOCATION": "us",
-            "MNPI_DEFAULT_MODEL": "gemini-3.8-flash",
-        },
+        extra_packages=ADK_EXTRA_PACKAGES,
         project_id=project_id,
         location=location,
     )
