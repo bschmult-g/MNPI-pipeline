@@ -31,10 +31,16 @@ DEFAULT_TABLE = "document_alignment_log"
 
 
 def get_bigquery_client() -> Optional[bigquery.Client]:
-    """Returns an authenticated BigQuery client prioritizing gcloud token, then ADC."""
+    """Returns an authenticated BigQuery client prioritizing Application Default Credentials (ADC)."""
     project = settings.project_id
 
-    # 1. Prioritize gcloud CLI access token for workstation and local runs
+    # 1. Standard Application Default Credentials (ADC) with quota project and auto-refresh
+    try:
+        return bigquery.Client(project=project)
+    except Exception as err:
+        logger.debug(f"Standard ADC initialization notice for BigQuery: {err}")
+
+    # 2. Fallback to gcloud CLI access token
     try:
         token = subprocess.check_output(
             ["gcloud", "auth", "print-access-token"],
@@ -46,13 +52,7 @@ def get_bigquery_client() -> Optional[bigquery.Client]:
             creds = Credentials(token)
             return bigquery.Client(project=project, credentials=creds)
     except Exception as e:
-        logger.debug(f"gcloud access token notice for BigQuery: {e}")
-
-    # 2. Fallback to standard Application Default Credentials (e.g., CI/CD or Cloud Run)
-    try:
-        return bigquery.Client(project=project)
-    except Exception as err:
-        logger.warning(f"Unable to initialize BigQuery client via ADC: {err}")
+        logger.warning(f"Unable to initialize BigQuery client via fallback token: {e}")
 
     return None
 

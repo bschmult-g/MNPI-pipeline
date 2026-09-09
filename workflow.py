@@ -403,7 +403,18 @@ def get_genai_client() -> Optional[Any]:
     from google import genai
     from google.genai.types import HttpOptions
 
-    # 1. First try gcloud CLI access token (fastest and guaranteed valid for local workstation)
+    # 1. Standard Application Default Credentials (ADC) with quota project and auto-refresh
+    try:
+        return genai.Client(
+            vertexai=True,
+            project=settings.project_id,
+            location=settings.location,
+            http_options=HttpOptions(base_url=settings.api_endpoint),
+        )
+    except Exception as err:
+        logger.debug(f"Standard ADC initialization notice for Vertex AI: {err}")
+
+    # 2. Fallback to gcloud CLI access token
     try:
         import subprocess
         from google.oauth2.credentials import Credentials
@@ -422,18 +433,7 @@ def get_genai_client() -> Optional[Any]:
                 http_options=HttpOptions(base_url=settings.api_endpoint),
             )
     except Exception as e:
-        logger.debug(f"gcloud token check notice: {e}")
-
-    # 2. Fallback to standard Application Default Credentials (ADC)
-    try:
-        return genai.Client(
-            vertexai=True,
-            project=settings.project_id,
-            location=settings.location,
-            http_options=HttpOptions(base_url=settings.api_endpoint),
-        )
-    except Exception as err:
-        logger.warning(f"Unable to initialize Vertex AI GenAI client via ADC: {err}")
+        logger.warning(f"Unable to initialize Vertex AI GenAI client via fallback token: {e}")
 
     return None
 
