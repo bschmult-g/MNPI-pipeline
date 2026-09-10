@@ -1104,14 +1104,22 @@
     if (dom.peCausalSummary) {
       clearElement(dom.peCausalSummary);
       let causalText = "";
-      if (ca.ablation_mode && ca.ablation_mode.includes("skipped")) {
-        const uPct = ((ca.counterfactual_score || 0.05) * 100).toFixed(0);
-        causalText = `The Leave-One-Out (LOO) engine verified that the document's baseline violation risk is only <strong>${uPct}%</strong> (well below the 40% inspection threshold). Word-by-word ablation was skipped to optimize speed and cost, confirming that no individual phrase forces an insider trading breach.`;
-      } else if (ca.is_overdetermined) {
-        causalText = `Joint cluster ablation detected <strong>causal overdetermination</strong>: multiple redundant leak signals exist across this document. Removing any single phrase still leaves an actionable breach.`;
-      } else {
+      const baseScore = ca.full_violation_score !== undefined ? ca.full_violation_score : (ca.counterfactual_score || 0);
+      const basePct = Math.round(baseScore * 100);
+
+      if (ca.ablation_mode === "skipped_low_confidence") {
+        causalText = `The document's baseline MNPI risk was evaluated at <strong>${basePct}%</strong>, which is safely below the <strong>40% inspection threshold</strong>. Because the document as a whole is clean and non-material, fine-grained word-by-word (Leave-One-Out) ablation was unnecessary and was bypassed to maximize pipeline speed and minimize API cost.`;
+      } else if (ca.ablation_mode === "skipped_high_confidence") {
+        causalText = `The document's baseline MNPI risk is <strong>${basePct}%</strong>, exceeding the <strong>85% high-confidence threshold</strong>. Word-by-word counterfactual ablation was bypassed because the material disclosure is already blatant and unambiguous, warranting immediate redaction and enforcement.`;
+      } else if (ca.is_overdetermined || ca.ablation_mode === "joint_cluster") {
+        causalText = `Leave-One-Out ablation detected <strong>causal overdetermination</strong>: multiple redundant leak signals exist across this document. Removing any single phrase still leaves an actionable breach, indicating systemic non-public disclosure.`;
+      } else if (ca.ablation_mode === "single_token_loo") {
         const sInf = (ca.data_influence_score || 0).toFixed(2);
-        causalText = `Leave-One-Out ablation isolated key sensitive terms with a causal data influence score of <strong>${sInf}</strong>, driving the model's determination.`;
+        causalText = `The document scored in the borderline inspection zone (40%–85%). Leave-One-Out ablation isolated key sensitive terms (causal data influence: <strong>${sInf}</strong>) that directly drove the compliance flag.`;
+      } else if (ca.ablation_mode && ca.ablation_mode.includes("skipped")) {
+        causalText = `The document's baseline risk is <strong>${basePct}%</strong>, falling outside the borderline inspection range (40%–85%). Deep counterfactual ablation was bypassed.`;
+      } else {
+        causalText = ca.causal_rationale ? escapeHtml(ca.causal_rationale) : "Causal analysis complete.";
       }
       const pCausal = document.createElement("p");
       pCausal.innerHTML = causalText;
