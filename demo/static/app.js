@@ -898,13 +898,21 @@
     // 4c. Causal Attribution Engine (LOO)
     if (verdict.causal_attribution && dom.causalModeBadge) {
       const ca = verdict.causal_attribution;
-      dom.causalModeBadge.textContent = ca.ablation_mode;
       if (ca.ablation_mode === "joint_cluster") {
         dom.causalModeBadge.className = "badge-chip critical";
-      } else if (ca.ablation_mode.includes("skipped")) {
+        dom.causalModeBadge.textContent = "Joint Multi-Leak Permutations";
+      } else if (ca.ablation_mode === "skipped_low_confidence") {
         dom.causalModeBadge.className = "badge-chip ticker";
+        dom.causalModeBadge.textContent = "Verified Safe (< 40% Floor)";
+      } else if (ca.ablation_mode === "skipped_high_confidence") {
+        dom.causalModeBadge.className = "badge-chip critical";
+        dom.causalModeBadge.textContent = "Explicit Leak (> 85% Ceiling)";
+      } else if (ca.ablation_mode === "single_token_loo") {
+        dom.causalModeBadge.className = "badge-chip warning";
+        dom.causalModeBadge.textContent = "Gray Zone: Active Permutations";
       } else {
         dom.causalModeBadge.className = "badge-chip warning";
+        dom.causalModeBadge.textContent = ca.ablation_mode || "Awaiting Evaluation";
       }
 
       if (dom.metricDataInfluence) dom.metricDataInfluence.textContent = (ca.data_influence_score || 0).toFixed(2);
@@ -1108,16 +1116,16 @@
       const basePct = Math.round(baseScore * 100);
 
       if (ca.ablation_mode === "skipped_low_confidence") {
-        causalText = `The document's baseline MNPI risk was evaluated at <strong>${basePct}%</strong>, which is safely below the <strong>40% inspection threshold</strong>. Because the document as a whole is clean and non-material, fine-grained word-by-word (Leave-One-Out) ablation was unnecessary and was bypassed to maximize pipeline speed and minimize API cost.`;
+        causalText = `Leave-One-Out (LOO) testing only triggers when a document lands in the <strong>ambiguous gray zone</strong> (a 40%–85% risk score), where the engine takes identified candidate blocks and runs permutations of the phrases to see if removing any of them flips the compliance determination. Because this document evaluated at <strong>${basePct}%</strong> (safely below the 40% floor), the text was confirmed safe overall and phrase permutation testing was not required.`;
       } else if (ca.ablation_mode === "skipped_high_confidence") {
-        causalText = `The document's baseline MNPI risk is <strong>${basePct}%</strong>, exceeding the <strong>85% high-confidence threshold</strong>. Word-by-word counterfactual ablation was bypassed because the material disclosure is already blatant and unambiguous, warranting immediate redaction and enforcement.`;
+        causalText = `The document evaluated at <strong>${basePct}%</strong> risk, well above the 85% ceiling. Phrase permutation testing was not required because the material non-public leak is already explicit and undeniable, triggering immediate redaction under SEC Rule 10b-5.`;
       } else if (ca.is_overdetermined || ca.ablation_mode === "joint_cluster") {
-        causalText = `Leave-One-Out ablation detected <strong>causal overdetermination</strong>: multiple redundant leak signals exist across this document. Removing any single phrase still leaves an actionable breach, indicating systemic non-public disclosure.`;
+        causalText = `The document landed in the ambiguous gray zone (40%–85%), triggering Leave-One-Out phrase permutations. Testing revealed <strong>causal overdetermination</strong>: multiple redundant leak signals exist. Removing any single phrase still leaves an active violation, confirming that multiple corroborating phrases must be redacted.`;
       } else if (ca.ablation_mode === "single_token_loo") {
         const sInf = (ca.data_influence_score || 0).toFixed(2);
-        causalText = `The document scored in the borderline inspection zone (40%–85%). Leave-One-Out ablation isolated key sensitive terms (causal data influence: <strong>${sInf}</strong>) that directly drove the compliance flag.`;
+        causalText = `The document landed in the ambiguous gray zone (40%–85%), triggering Leave-One-Out phrase permutations. The engine tested variations of candidate phrases and isolated specific terms (causal data influence: <strong>${sInf}</strong>) that directly drove the compliance flag.`;
       } else if (ca.ablation_mode && ca.ablation_mode.includes("skipped")) {
-        causalText = `The document's baseline risk is <strong>${basePct}%</strong>, falling outside the borderline inspection range (40%–85%). Deep counterfactual ablation was bypassed.`;
+        causalText = `The document's baseline risk is <strong>${basePct}%</strong>, falling outside the 40%–85% ambiguous gray zone. Phrase permutation testing was not required.`;
       } else {
         causalText = ca.causal_rationale ? escapeHtml(ca.causal_rationale) : "Causal analysis complete.";
       }

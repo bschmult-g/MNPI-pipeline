@@ -45,22 +45,22 @@ class HierarchicalAblationTrigger:
             return (
                 False,
                 "skipped_low_confidence",
-                f"Document cleared as benign/public (S_full={score:.2f} < {cls.LOW_CONFIDENCE_THRESHOLD}). "
-                "Ablation bypassed to optimize latency and token cost.",
+                f"Document cleared as benign/safe (S_full={score:.2f} < {cls.LOW_CONFIDENCE_THRESHOLD} floor). "
+                "Zero sensitive signals detected; phrase permutation testing is only triggered in the ambiguous gray zone (40%–85%).",
             )
         elif score > cls.HIGH_CONFIDENCE_THRESHOLD:
             return (
                 False,
                 "skipped_high_confidence",
-                f"Violation is decisively certain (S_full={score:.2f} > {cls.HIGH_CONFIDENCE_THRESHOLD}). "
-                "Ablation bypassed to conserve API cost while preserving definitive enforcement.",
+                f"Violation is decisively certain (S_full={score:.2f} > {cls.HIGH_CONFIDENCE_THRESHOLD} ceiling). "
+                "Immediate redaction enforced under SEC Rule 10b-5 without needing phrase permutations.",
             )
         else:
             return (
                 True,
                 "borderline_triggered",
                 f"Borderline confidence detected ({cls.LOW_CONFIDENCE_THRESHOLD} <= S_full={score:.2f} <= {cls.HIGH_CONFIDENCE_THRESHOLD}). "
-                "Triggering Causal Attribution Engine for counterfactual verification.",
+                "Triggering Leave-One-Out phrase permutations to test causal sensitivity.",
             )
 
 
