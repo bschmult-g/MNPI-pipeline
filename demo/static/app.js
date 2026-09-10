@@ -113,6 +113,19 @@
     metaRisk: document.getElementById("meta-risk"),
     metaAction: document.getElementById("meta-action"),
 
+    // Security & Entitlements Tag Display
+    entRankBadge: document.getElementById("ent-rank-badge"),
+    entTier: document.getElementById("ent-tier"),
+    entMinRole: document.getElementById("ent-min-role"),
+    entDepartments: document.getElementById("ent-departments"),
+    entTickers: document.getElementById("ent-tickers"),
+    simUserRole: document.getElementById("sim-user-role"),
+    btnTestEntitlement: document.getElementById("btn-test-entitlement"),
+    simResultBox: document.getElementById("sim-result-box"),
+    sidecarFilenameLabel: document.getElementById("sidecar-filename-label"),
+    btnCopyEntitlementsJson: document.getElementById("btn-copy-entitlements-json"),
+    entitlementsJsonDisplay: document.getElementById("entitlements-json-display"),
+
     // BigQuery Document Alignment Audit DOM Elements
     bqStatusPill: document.getElementById("bq-status-pill"),
     bqStatusText: document.getElementById("bq-status-text"),
@@ -889,6 +902,88 @@
 
     // 7. Render Output Document
     renderOutputView();
+
+    // 8. Render Security & Access Entitlements Tag
+    renderEntitlementsTag(data);
+  }
+
+  function renderEntitlementsTag(data) {
+    if (!dom.entRankBadge) return;
+
+    const verdict = data.verdict || {};
+    const ent = verdict.entitlements || data.entitlements;
+    const sidecar = data.sidecar_file || {};
+
+    if (!ent) {
+      dom.entRankBadge.className = "badge-rank rank-none";
+      dom.entRankBadge.textContent = "Rank -";
+      if (dom.entTier) dom.entTier.textContent = "-";
+      if (dom.entMinRole) dom.entMinRole.textContent = "-";
+      return;
+    }
+
+    const rank = ent.clearance_rank || 1;
+    const rankLabels = {
+      1: "Rank 1: Public / Any",
+      2: "Rank 2: Analyst+",
+      3: "Rank 3: Senior Associate+",
+      4: "Rank 4: VP & Legal Only",
+    };
+
+    dom.entRankBadge.className = "badge-rank rank-" + rank;
+    dom.entRankBadge.textContent = rankLabels[rank] || ("Rank " + rank);
+
+    if (dom.entTier) dom.entTier.textContent = ent.classification_tier || "-";
+    if (dom.entMinRole) dom.entMinRole.textContent = ent.min_role_required || "-";
+
+    // Render department chips
+    if (dom.entDepartments) {
+      clearElement(dom.entDepartments);
+      const depts = ent.permitted_departments || [];
+      if (depts.length > 0) {
+        depts.forEach((d) => {
+          const chip = document.createElement("span");
+          chip.className = "ent-tag-chip dept";
+          chip.textContent = d;
+          dom.entDepartments.appendChild(chip);
+        });
+      } else {
+        dom.entDepartments.innerHTML = '<span class="placeholder-text">All Departments</span>';
+      }
+    }
+
+    // Render ticker chips
+    if (dom.entTickers) {
+      clearElement(dom.entTickers);
+      const tickers = ent.ticker_restrictions || [];
+      if (tickers.length > 0) {
+        tickers.forEach((t) => {
+          const chip = document.createElement("span");
+          chip.className = "ent-tag-chip ticker";
+          chip.textContent = "$" + t;
+          dom.entTickers.appendChild(chip);
+        });
+      } else {
+        dom.entTickers.innerHTML = '<span class="placeholder-text">None</span>';
+      }
+    }
+
+    // Sidecar status
+    if (dom.sidecarFilenameLabel) {
+      const fn = sidecar.filename || (ent.document_id + ".entitlements.json");
+      dom.sidecarFilenameLabel.textContent = fn + (sidecar.exists ? " (Attached & Stored)" : " (Attached)");
+    }
+
+    // JSON envelope display
+    if (dom.entitlementsJsonDisplay) {
+      dom.entitlementsJsonDisplay.textContent = JSON.stringify(ent, null, 2);
+    }
+
+    // Reset simulator result box
+    if (dom.simResultBox) {
+      dom.simResultBox.className = "sim-result-box neutral";
+      dom.simResultBox.textContent = `Document requires ${rankLabels[rank] || "Rank " + rank}. Select a role and test policy access.`;
+    }
   }
 
   function renderCriterion(testObj, statusEl, barEl, rationaleEl) {
@@ -1143,7 +1238,7 @@
     if (filtered.length === 0) {
       const tr = document.createElement("tr");
       const td = createTextElement("td", "No matching document alignment records found in BigQuery.", "audit-table-loading");
-      td.colSpan = 9;
+      td.colSpan = 10;
       tr.appendChild(td);
       tableBody.appendChild(tr);
       return;
@@ -1182,6 +1277,17 @@
       channelSpan.textContent = rec.channel || "gcs";
       tdChannel.appendChild(channelSpan);
       tr.appendChild(tdChannel);
+
+      // 3b. Clearance Rank Badge
+      const tdRank = document.createElement("td");
+      const rankVal = rec.clearance_rank || (rec.verdict === "MNPI_CONFIRMED" ? 4 : rec.verdict === "POTENTIAL_MNPI" ? 3 : rec.verdict === "PUBLIC_NON_MATERIAL" ? 2 : 1);
+      const rankPill = document.createElement("span");
+      rankPill.className = "badge-rank rank-" + rankVal;
+      rankPill.style.fontSize = "0.7rem";
+      rankPill.style.padding = "0.15rem 0.45rem";
+      rankPill.textContent = "Rank " + rankVal;
+      tdRank.appendChild(rankPill);
+      tr.appendChild(tdRank);
 
       // 4. Verdict Badge
       const tdVerdict = document.createElement("td");
@@ -1311,6 +1417,7 @@
 
     appendField("Verdict", rec.verdict || "N/A");
     appendField("Risk Level", rec.risk_level || "N/A");
+    appendField("Clearance Rank", "Rank " + (rec.clearance_rank || 1));
     appendField("Recommended Action", rec.recommended_action || "N/A");
     appendField("Ingestion Channel", rec.channel || "N/A");
     appendField("Model Used", rec.model_used || "gemini-3.8-flash");
@@ -1348,6 +1455,26 @@
     signalsSec.appendChild(sigRow);
     dom.modalDocBody.appendChild(signalsSec);
 
+    // Security Entitlements Manifest JSON
+    if (rec.entitlements_json) {
+      const entSec = document.createElement("div");
+      entSec.style.marginBottom = "1rem";
+      entSec.appendChild(createTextElement("div", "Security & Entitlements Manifest (JSON)", "modal-field-label"));
+      try {
+        const entObj = typeof rec.entitlements_json === "string" ? JSON.parse(rec.entitlements_json) : rec.entitlements_json;
+        const entPre = createTextElement("pre", JSON.stringify(entObj, null, 2), "modal-box");
+        entPre.style.fontSize = "0.75rem";
+        entPre.style.fontFamily = "var(--font-mono)";
+        entPre.style.maxHeight = "180px";
+        entPre.style.overflowY = "auto";
+        entSec.appendChild(entPre);
+      } catch (e) {
+        const entBox = createTextElement("div", String(rec.entitlements_json), "modal-box");
+        entSec.appendChild(entBox);
+      }
+      dom.modalDocBody.appendChild(entSec);
+    }
+
     // Redacted Preview
     if (rec.redacted_preview) {
       const redSec = document.createElement("div");
@@ -1376,6 +1503,7 @@
       "timestamp",
       "document_name",
       "channel",
+      "clearance_rank",
       "verdict",
       "risk_level",
       "recommended_action",
@@ -1386,6 +1514,7 @@
       "latency_ms",
       "audit_hash",
       "summary_justification",
+      "entitlements_json",
     ];
 
     const csvRows = [headers.join(",")];
@@ -1771,6 +1900,60 @@
     } catch (e) {
       console.warn("Could not fetch /api/rl/config", e);
     }
+  }
+
+  // Entitlements Downstream Access Simulator
+  if (dom.btnTestEntitlement) {
+    dom.btnTestEntitlement.addEventListener("click", async function () {
+      const selectedRole = dom.simUserRole ? dom.simUserRole.value : "ANALYST";
+      const lastData = state.lastProcessedData;
+      const ent = (lastData && lastData.verdict && lastData.verdict.entitlements) || (lastData && lastData.entitlements);
+
+      if (!ent) {
+        alert("Please process a document first to generate an entitlements tag.");
+        return;
+      }
+
+      try {
+        const res = await fetch("/api/entitlements/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_role: selectedRole,
+            document_name: ent.document_id,
+            clearance_rank: ent.clearance_rank,
+            entitlements: ent,
+          }),
+        });
+        const evalResult = await res.json();
+        if (dom.simResultBox) {
+          if (evalResult.access_granted) {
+            dom.simResultBox.className = "sim-result-box granted";
+            dom.simResultBox.innerHTML = "<strong>✅ ACCESS GRANTED:</strong> " + escapeHtml(evalResult.reason);
+          } else {
+            dom.simResultBox.className = "sim-result-box denied";
+            dom.simResultBox.innerHTML = "<strong>❌ ACCESS DENIED:</strong> " + escapeHtml(evalResult.reason);
+          }
+        }
+      } catch (err) {
+        console.error("Entitlement verification error:", err);
+      }
+    });
+  }
+
+  // Copy Entitlements JSON Manifest to Clipboard
+  if (dom.btnCopyEntitlementsJson) {
+    dom.btnCopyEntitlementsJson.addEventListener("click", function () {
+      if (dom.entitlementsJsonDisplay) {
+        navigator.clipboard.writeText(dom.entitlementsJsonDisplay.textContent).then(function () {
+          const orig = dom.btnCopyEntitlementsJson.textContent;
+          dom.btnCopyEntitlementsJson.textContent = "✓ Copied Manifest!";
+          setTimeout(function () {
+            dom.btnCopyEntitlementsJson.textContent = orig;
+          }, 2000);
+        });
+      }
+    });
   }
 
   // Initialize

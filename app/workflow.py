@@ -13,10 +13,11 @@ Supports:
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
-from typing import AsyncGenerator, Dict, Any, Optional
+from typing import AsyncGenerator, Dict, Any, List, Optional
 
 from google.adk import Workflow, Runner
 from google.adk.agents import Agent
@@ -32,6 +33,7 @@ from app.schemas import (
     EntityItem,
     FactCheckingDossier,
     PublicCheckResult,
+    SecurityEntitlementsTag,
     TriggerDetectionResult,
     TriggerItem,
     MaterialityCode,
@@ -277,9 +279,105 @@ def run_offline_fact_checker(text: str) -> FactCheckingDossier:
     )
 
 
+def derive_security_entitlements(
+    verdict: ArbiterVerdict,
+    dossier: Optional[FactCheckingDossier] = None,
+    document_name: Optional[str] = None,
+    audit_hash: Optional[str] = None,
+) -> SecurityEntitlementsTag:
+    """Derives machine-enforceable security and access entitlement metadata from Arbiter assessment.
+
+    Mapping Hierarchy:
+    - MNPI_CONFIRMED (Critical):
+        Clearance Rank 4, Role VICE_PRESIDENT / LEGAL_COMPLIANCE,
+        Departments: LEGAL, COMPLIANCE, INVESTMENT_BANKING, EXECUTIVE_COMMITTEE
+        Groups: grp-mnpi-cleared-vp, grp-compliance-officers, grp-legal-counsel
+        Routing: BLOCK_COMMUNICATION (or REDACT_AND_PROCEED if redacted)
+    - POTENTIAL_MNPI (High):
+        Clearance Rank 3, Role SENIOR_ASSOCIATE,
+        Departments: LEGAL, COMPLIANCE, INVESTMENT_BANKING, RESEARCH_MANAGEMENT
+        Groups: grp-mnpi-cleared-vp, grp-compliance-officers, grp-senior-associates
+        Routing: ESCALATE_TO_COMPLIANCE
+    - PUBLIC_NON_MATERIAL (Medium/Low):
+        Clearance Rank 2, Role ANALYST,
+        Departments: RESEARCH, EQUITY_ANALYST, TRADING, INVESTMENT_BANKING, COMPLIANCE
+        Groups: grp-equity-analysts, grp-research-staff, grp-trading-desk
+        Routing: APPROVE_RELEASE
+    - CLEARED (Low):
+        Clearance Rank 1, Role ANY,
+        Departments: ALL_DEPARTMENTS, PUBLIC_DOMAIN
+        Groups: grp-all-employees, grp-public-facing
+        Routing: APPROVE_RELEASE
+    """
+    verdict_str = verdict.verdict
+    risk_level = verdict.risk_level
+    doc_id = document_name or "document.txt"
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Extract ticker restrictions from dossier entities
+    tickers: List[str] = []
+    if dossier and hasattr(dossier, "entities") and dossier.entities:
+        tickers = list(dossier.entities.tickers_found or [])
+        if not tickers and dossier.entities.entities:
+            tickers = [e.name for e in dossier.entities.entities if e.category == "stock_ticker"]
+
+    is_redacted = bool(verdict.redacted_text and verdict.redacted_text != getattr(dossier, "original_text", ""))
+
+    if verdict_str == "MNPI_CONFIRMED" or risk_level == "CRITICAL":
+        tier = "MNPI_CRITICAL"
+        rank = 4
+        role = "VICE_PRESIDENT"
+        depts = ["LEGAL", "COMPLIANCE", "INVESTMENT_BANKING", "EXECUTIVE_COMMITTEE"]
+        groups = ["grp-mnpi-cleared-vp", "grp-compliance-officers", "grp-legal-counsel"]
+        action = "REDACT_AND_PROCEED" if is_redacted else "BLOCK_COMMUNICATION"
+    elif verdict_str == "POTENTIAL_MNPI" or risk_level == "HIGH":
+        tier = "MNPI_HIGH"
+        rank = 3
+        role = "SENIOR_ASSOCIATE"
+        depts = ["LEGAL", "COMPLIANCE", "INVESTMENT_BANKING", "RESEARCH_MANAGEMENT"]
+        groups = ["grp-mnpi-cleared-vp", "grp-compliance-officers", "grp-senior-associates"]
+        action = "ESCALATE_TO_COMPLIANCE"
+    elif verdict_str == "PUBLIC_NON_MATERIAL":
+        tier = "INTERNAL_CONFIDENTIAL"
+        rank = 2
+        role = "ANALYST"
+        depts = ["RESEARCH", "EQUITY_ANALYST", "TRADING", "INVESTMENT_BANKING", "COMPLIANCE"]
+        groups = ["grp-equity-analysts", "grp-research-staff", "grp-trading-desk"]
+        action = "APPROVE_RELEASE"
+    else:  # CLEARED / LOW
+        tier = "PUBLIC_UNRESTRICTED"
+        rank = 1
+        role = "ANY"
+        depts = ["ALL_DEPARTMENTS", "PUBLIC_DOMAIN"]
+        groups = ["grp-all-employees", "grp-public-facing"]
+        action = "APPROVE_RELEASE"
+
+    # Compute audit hash if not provided
+    computed_hash = audit_hash
+    if not computed_hash and dossier:
+        from app.audit_logger import compute_audit_hash
+        computed_hash = compute_audit_hash(doc_id, getattr(dossier, "original_text", ""), verdict_str)
+
+    return SecurityEntitlementsTag(
+        tag_version="1.0",
+        document_id=doc_id,
+        classification_tier=tier,
+        clearance_rank=rank,
+        min_role_required=role,
+        permitted_departments=depts,
+        permitted_groups=groups,
+        ticker_restrictions=tickers,
+        routing_action=action,
+        is_redacted=is_redacted,
+        audit_hash=computed_hash,
+        created_at=now_iso,
+    )
+
+
 def run_offline_arbiter(
     dossier: FactCheckingDossier,
     weights: Optional[RewardWeightsConfig] = None,
+    document_name: Optional[str] = None,
 ) -> ArbiterVerdict:
     """Executes the Arbiter 4-Test Assessment deterministically against a dossier."""
     text = dossier.original_text
@@ -464,6 +562,13 @@ def run_offline_arbiter(
     )
     draft_verdict.rl_metrics = rl_metrics
 
+    # Attach derived Security & Entitlements Tag
+    draft_verdict.entitlements = derive_security_entitlements(
+        verdict=draft_verdict,
+        dossier=dossier,
+        document_name=document_name,
+    )
+
     return draft_verdict
 
 
@@ -557,6 +662,7 @@ def run_live_arbiter(
     dossier: Optional[FactCheckingDossier] = None,
     model: Optional[str] = None,
     weights: Optional[RewardWeightsConfig] = None,
+    document_name: Optional[str] = None,
     **kwargs: Any,
 ) -> ArbiterVerdict:
     """Invokes the live Gemini model for the Decision Authority Arbiter agent.
@@ -661,6 +767,11 @@ Fact Checking Dossier:
         causal_attribution=verdict.causal_attribution,
         weights=weights,
     )
+    verdict.entitlements = derive_security_entitlements(
+        verdict=verdict,
+        dossier=actual_dossier,
+        document_name=document_name,
+    )
 
     return verdict
 
@@ -725,7 +836,13 @@ def run_two_agent_pipeline(
         log_to_bq=log_to_bq,
     )
     verdict = ArbiterVerdict.model_validate(verdict_dict)
-    print(f"   ✅ [2/2] Arbiter complete: Verdict={verdict.verdict}, Risk={verdict.risk_level}.", flush=True)
+    if verdict.entitlements is None or verdict.entitlements.document_id in ("document.txt", "unspecified"):
+        verdict.entitlements = derive_security_entitlements(
+            verdict=verdict,
+            dossier=dossier,
+            document_name=document_name,
+        )
+    print(f"   ✅ [2/2] Arbiter complete: Verdict={verdict.verdict}, Risk={verdict.risk_level}, Clearance=Rank {verdict.entitlements.clearance_rank}.", flush=True)
 
     return dossier, verdict
 

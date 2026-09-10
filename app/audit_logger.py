@@ -119,10 +119,21 @@ def ensure_audit_table(client: Optional[bigquery.Client] = None) -> bool:
             bigquery.SchemaField("redacted_preview", "STRING", mode="NULLABLE"),
             bigquery.SchemaField("latency_ms", "FLOAT", mode="NULLABLE"),
             bigquery.SchemaField("model_used", "STRING", mode="NULLABLE"),
+            bigquery.SchemaField("clearance_rank", "INTEGER", mode="NULLABLE"),
+            bigquery.SchemaField("entitlements_json", "STRING", mode="NULLABLE"),
         ]
 
         table = bigquery.Table(table_id, schema=schema)
-        bq_client.create_table(table, exists_ok=True)
+        try:
+            existing_table = bq_client.get_table(table_id)
+            existing_col_names = {f.name for f in existing_table.schema}
+            added_fields = [f for f in schema if f.name not in existing_col_names]
+            if added_fields:
+                existing_table.schema = list(existing_table.schema) + added_fields
+                bq_client.update_table(existing_table, ["schema"])
+                logger.info(f"Updated BigQuery audit table schema with new columns: {[f.name for f in added_fields]}")
+        except Exception:
+            bq_client.create_table(table, exists_ok=True)
         return True
     except Exception as e:
         logger.error(f"Error ensuring BigQuery audit table {table_id}: {e}", exc_info=True)
@@ -169,12 +180,20 @@ def log_document_alignment_to_bq(
 
     redacted_preview = (verdict.redacted_text or "")[:500]
 
+    clearance_rank = None
+    entitlements_json = None
+    if getattr(verdict, "entitlements", None):
+        clearance_rank = verdict.entitlements.clearance_rank
+        entitlements_json = json.dumps(verdict.entitlements.to_manifest_dict())
+
     record = {
         "timestamp": now_iso,
         "document_name": document_name,
         "channel": channel,
         "verdict": verdict.verdict,
         "risk_level": verdict.risk_level,
+        "clearance_rank": clearance_rank,
+        "entitlements_json": entitlements_json,
         "recommended_action": verdict.recommended_action,
         "materiality_score": float(verdict.materiality_test.score),
         "public_availability_score": float(verdict.public_availability_test.score),
@@ -252,6 +271,8 @@ def fetch_document_alignment_logs(
                 channel,
                 verdict,
                 risk_level,
+                clearance_rank,
+                entitlements_json,
                 recommended_action,
                 materiality_score,
                 public_availability_score,

@@ -360,6 +360,75 @@
           <span>Action: <strong id="meta-action">-</strong></span>
         </div>
       </div>
+
+      <!-- SECURITY & ACCESS ENTITLEMENTS TAG CARD -->
+      <div class="card entitlements-card" id="entitlements-card">
+        <div class="card-header">
+          <div class="agent-avatar" style="background: linear-gradient(135deg, #6366f1, #0284c7);">&#128273;</div>
+          <div style="flex: 1;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <h3>Security &amp; Entitlements Tag</h3>
+              <span id="ent-rank-badge" class="badge-rank rank-none">Rank -</span>
+            </div>
+            <span class="agent-role">Indexable downstream access manifest &amp; GCS object metadata</span>
+          </div>
+        </div>
+
+        <div class="entitlements-body">
+          <div class="entitlements-summary-grid">
+            <div class="ent-item">
+              <span class="ent-label">Classification Tier:</span>
+              <strong id="ent-tier">-</strong>
+            </div>
+            <div class="ent-item">
+              <span class="ent-label">Min Role Required:</span>
+              <strong id="ent-min-role">-</strong>
+            </div>
+            <div class="ent-item full-width">
+              <span class="ent-label">Permitted Departments:</span>
+              <div id="ent-departments" class="ent-chips-wrap"><span class="placeholder-text">None</span></div>
+            </div>
+            <div class="ent-item full-width">
+              <span class="ent-label">Associated Tickers:</span>
+              <div id="ent-tickers" class="ent-chips-wrap"><span class="placeholder-text">None</span></div>
+            </div>
+          </div>
+
+          <!-- Interactive Downstream Access Policy Tester -->
+          <div class="entitlements-simulator">
+            <div class="simulator-title">&#9881;&#65039; Test Downstream Access Policy</div>
+            <div class="simulator-controls">
+              <label for="sim-user-role">Simulate Role:</label>
+              <select id="sim-user-role" class="form-select-sm">
+                <option value="ANALYST">Analyst (Rank 2)</option>
+                <option value="SENIOR_ASSOCIATE">Senior Associate (Rank 3)</option>
+                <option value="VICE_PRESIDENT">Vice President (Rank 4)</option>
+                <option value="LEGAL_COMPLIANCE">Legal / Compliance (Rank 4)</option>
+                <option value="EXTERNAL_GUEST">External / Guest (Rank 1)</option>
+              </select>
+              <button id="btn-test-entitlement" class="btn-secondary btn-sm">Check Access</button>
+            </div>
+            <div id="sim-result-box" class="sim-result-box neutral">
+              Select a role and click &quot;Check Access&quot; to test against the active document tag.
+            </div>
+          </div>
+
+          <!-- Sidecar & GCS Metadata Status -->
+          <div class="sidecar-status-bar">
+            <div>
+              <span class="sidecar-badge">&#128196; Sidecar:</span>
+              <code id="sidecar-filename-label">-</code>
+            </div>
+            <button id="btn-copy-entitlements-json" class="btn-secondary btn-xs">&#128203; Copy Tag JSON</button>
+          </div>
+
+          <!-- Collapsible JSON Tag Viewer -->
+          <details class="entitlements-json-details">
+            <summary>View Complete Indexable JSON Envelope</summary>
+            <pre id="entitlements-json-display" class="code-pre">{ &quot;status&quot;: &quot;No document arbitrated yet&quot; }</pre>
+          </details>
+        </div>
+      </div>
     </section>
   </main>
 
@@ -406,6 +475,7 @@
             <th>Timestamp (UTC)</th>
             <th>Document Name</th>
             <th>Channel</th>
+            <th>Clearance Rank</th>
             <th>Arbiter Verdict</th>
             <th>Recommended Action</th>
             <th>4 Assessment Criteria Scores</th>
@@ -416,7 +486,7 @@
         </thead>
         <tbody id="audit-table-body">
           <tr>
-            <td colspan="9" class="audit-table-loading">Loading BigQuery audit records...</td>
+            <td colspan="10" class="audit-table-loading">Loading BigQuery audit records...</td>
           </tr>
         </tbody>
       </table>
@@ -501,6 +571,7 @@
                 <th>Timestamp (UTC)</th>
                 <th>Document Name</th>
                 <th>Channel</th>
+                <th>Clearance Rank</th>
                 <th>Arbiter Verdict</th>
                 <th>Action</th>
                 <th>4 Assessment Scores</th>
@@ -511,7 +582,7 @@
             </thead>
             <tbody id="bq-explorer-table-body">
               <tr>
-                <td colspan="9" class="audit-table-loading">Loading BigQuery records...</td>
+                <td colspan="10" class="audit-table-loading">Loading BigQuery records...</td>
               </tr>
             </tbody>
           </table>
@@ -553,6 +624,8 @@
     timestamp,
     document_name,
     channel,
+    clearance_rank,
+    entitlements_json,
     verdict,
     risk_level,
     recommended_action,

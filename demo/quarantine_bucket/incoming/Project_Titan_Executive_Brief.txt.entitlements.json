@@ -1,0 +1,23 @@
+{
+  "tag_version": "1.0",
+  "document_id": "document.txt",
+  "classification_tier": "MNPI_CRITICAL",
+  "clearance_rank": 4,
+  "min_role_required": "VICE_PRESIDENT",
+  "permitted_departments": [
+    "LEGAL",
+    "COMPLIANCE",
+    "INVESTMENT_BANKING",
+    "EXECUTIVE_COMMITTEE"
+  ],
+  "permitted_groups": [
+    "grp-mnpi-cleared-vp",
+    "grp-compliance-officers",
+    "grp-legal-counsel"
+  ],
+  "ticker_restrictions": [],
+  "routing_action": "REDACT_AND_PROCEED",
+  "is_redacted": true,
+  "audit_hash": "sha256:1ba5f00ebcb6887c632af9cb6d2be0e14bf90314e63affb504f142e1abb475fe",
+  "created_at": "2026-09-10T17:25:57.620768+00:00"
+}

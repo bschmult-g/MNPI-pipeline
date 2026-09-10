@@ -13,6 +13,7 @@ Compliant with secure web coding standards:
 from __future__ import annotations
 
 import io
+import json
 import mimetypes
 import os
 import re
@@ -45,8 +46,8 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 try:
-    from app.workflow import run_pipeline
-    from app.schemas import ArbiterVerdict, FactCheckingDossier
+    from app.workflow import run_pipeline, derive_security_entitlements
+    from app.schemas import ArbiterVerdict, FactCheckingDossier, SecurityEntitlementsTag
     from app.audit_logger import (
         log_document_alignment_to_bq,
         fetch_document_alignment_logs,
@@ -62,8 +63,8 @@ try:
         set_active_weights,
     )
 except ImportError:
-    from workflow import run_pipeline
-    from schemas import ArbiterVerdict, FactCheckingDossier
+    from workflow import run_pipeline, derive_security_entitlements
+    from schemas import ArbiterVerdict, FactCheckingDossier, SecurityEntitlementsTag
     from audit_logger import (
         log_document_alignment_to_bq,
         fetch_document_alignment_logs,
@@ -112,6 +113,15 @@ class ProcessRequest(BaseModel):
 class FetchBucketRequest(BaseModel):
     """Payload to fetch a file from a Google Cloud Storage bucket path."""
     gcs_uri: str = Field(..., description="URI in the format gs://bucket-name/path/to/file.txt")
+
+
+class VerifyEntitlementsRequest(BaseModel):
+    """Payload to test downstream entitlement access against a document tag."""
+    user_role: str = Field(default="ANALYST", description="User's organizational role")
+    user_department: Optional[str] = Field(default=None, description="User's organizational department")
+    document_name: Optional[str] = Field(default=None, description="Target document filename")
+    clearance_rank: Optional[int] = Field(default=None, description="Explicit clearance rank to check")
+    entitlements: Optional[Dict[str, Any]] = Field(default=None, description="Entitlements tag payload to evaluate")
 
 
 class IngestionPreset(BaseModel):
@@ -490,13 +500,17 @@ def list_quarantine_bucket_files(bucket: Optional[str] = None):
     files = []
     if QUARANTINE_DIR.exists():
         for path in sorted(QUARANTINE_DIR.glob("*")):
-            if path.is_file() and not path.name.startswith("."):
+            if path.is_file() and not path.name.startswith(".") and not path.name.endswith(".entitlements.json"):
                 mtime = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime(path.stat().st_mtime))
+                sidecar_path = QUARANTINE_DIR / f"{path.name}.entitlements.json"
+                has_sidecar = sidecar_path.exists()
                 files.append({
                     "filename": path.name,
                     "gcs_uri": f"gs://{target_bucket}/incoming/{path.name}",
                     "size_bytes": path.stat().st_size,
                     "updated": mtime,
+                    "has_entitlements": has_sidecar,
+                    "entitlements_file": f"{path.name}.entitlements.json" if has_sidecar else None,
                 })
     return {
         "bucket": f"gs://{target_bucket}/incoming/",
@@ -690,6 +704,42 @@ def process_document(req: ProcessRequest):
 
     redaction_diff = perform_redaction_diff(req.text, verdict.redacted_text or req.text)
 
+    # Ensure verdict has security & access entitlements
+    if not verdict.entitlements:
+        verdict.entitlements = derive_security_entitlements(
+            verdict=verdict,
+            dossier=dossier,
+            document_name=doc_name,
+        )
+
+    # Write companion sidecar entitlements file <doc_name>.entitlements.json
+    sidecar_filename = f"{doc_name}.entitlements.json"
+    sidecar_path = QUARANTINE_DIR / sidecar_filename
+    entitlements_dict = verdict.entitlements.to_manifest_dict() if verdict.entitlements else {}
+    try:
+        sidecar_path.write_text(json.dumps(entitlements_dict, indent=2), encoding="utf-8")
+        print(f"📄 [Entitlements] Wrote sidecar metadata manifest: {sidecar_path.name}", flush=True)
+    except Exception as sidecar_err:
+        logger.warning(f"Failed to write entitlements sidecar file: {sidecar_err}")
+
+    # Attach GCS object custom metadata if live storage blob exists
+    gcs_metadata_attached = False
+    storage_client = get_storage_client()
+    if storage_client and req.source_uri and req.source_uri.startswith("gs://"):
+        try:
+            match = re.match(r"^gs://([^/]+)/(.+)$", req.source_uri.strip())
+            if match:
+                b_name, bl_name = match.groups()
+                bucket = storage_client.bucket(b_name)
+                blob = bucket.get_blob(bl_name)
+                if blob and verdict.entitlements:
+                    blob.metadata = verdict.entitlements.to_gcs_metadata()
+                    blob.patch()
+                    gcs_metadata_attached = True
+                    print(f"🏷️  [GCS Metadata] Attached custom metadata to {req.source_uri}", flush=True)
+        except Exception as gcs_err:
+            logger.debug(f"GCS metadata attach notice: {gcs_err}")
+
     # Automatically stream compliance alignment record to BigQuery
     doc_name = req.document_title or (os.path.basename(req.source_uri) if req.source_uri else "document.txt")
     audit_res = log_document_alignment_to_bq(
@@ -715,10 +765,127 @@ def process_document(req: ProcessRequest):
             "action_summary": action_summary,
         },
         "verdict": verdict.model_dump(),
+        "entitlements": entitlements_dict,
+        "sidecar_file": {
+            "filename": sidecar_filename,
+            "path": str(sidecar_path),
+            "exists": sidecar_path.exists(),
+            "gcs_metadata_attached": gcs_metadata_attached,
+        },
         "dossier": dossier.model_dump(),
         "redaction_diff": redaction_diff,
         "audit": audit_res,
     }
+
+
+# ==============================================================================
+# Downstream Security Entitlements & Policy Verification Endpoints
+# ==============================================================================
+
+@app.post("/api/entitlements/verify")
+def verify_document_entitlements(req: VerifyEntitlementsRequest):
+    """Evaluates whether a given user role/department is entitled to access the arbitrated document.
+
+    Simulates downstream Policy Enforcement Point (PEP) evaluation against the document's
+    hierarchical clearance_rank and permitted_departments.
+    """
+    ROLE_HIERARCHY = {
+        "EXTERNAL_GUEST": 1,
+        "ANY": 1,
+        "PUBLIC": 1,
+        "ANALYST": 2,
+        "SENIOR_ASSOCIATE": 3,
+        "VICE_PRESIDENT": 4,
+        "LEGAL_COMPLIANCE": 4,
+        "EXECUTIVE": 4,
+    }
+
+    user_role_norm = req.user_role.strip().upper()
+    user_rank = ROLE_HIERARCHY.get(user_role_norm, 1)
+
+    # Determine required clearance rank and tag
+    required_rank = req.clearance_rank
+    tag_data = req.entitlements or {}
+    doc_name = req.document_name
+
+    if not required_rank and doc_name:
+        sidecar_path = QUARANTINE_DIR / f"{doc_name}.entitlements.json"
+        if sidecar_path.exists():
+            try:
+                tag_data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+                required_rank = tag_data.get("clearance_rank")
+            except Exception:
+                pass
+
+    if not required_rank and tag_data:
+        required_rank = tag_data.get("clearance_rank")
+
+    if required_rank is None:
+        required_rank = 1
+
+    permitted_depts = tag_data.get("permitted_departments", [])
+    tier = tag_data.get("classification_tier", "PUBLIC_UNRESTRICTED")
+    action = tag_data.get("routing_action", "APPROVE_RELEASE")
+    is_redacted = tag_data.get("is_redacted", False)
+
+    # Access evaluation: rank inequality check (user.rank >= doc.clearance_rank)
+    rank_granted = user_rank >= required_rank
+
+    # Department check if specified and restrictive
+    dept_granted = True
+    if req.user_department and permitted_depts and "ALL_DEPARTMENTS" not in permitted_depts:
+        user_dept_norm = req.user_department.strip().upper()
+        dept_granted = user_dept_norm in [d.upper() for d in permitted_depts]
+
+    access_granted = rank_granted and dept_granted
+
+    if access_granted:
+        reason = (
+            f"Access Granted: User role '{user_role_norm}' (Rank {user_rank}) meets or exceeds "
+            f"document requirement (Rank {required_rank})."
+        )
+    elif not rank_granted:
+        reason = (
+            f"Access Denied: Document classification requires Rank {required_rank} "
+            f"({tag_data.get('min_role_required', 'higher role')}), but user role "
+            f"'{user_role_norm}' only possesses Rank {user_rank}."
+        )
+    else:
+        reason = (
+            f"Access Denied: User department '{req.user_department}' is not in permitted "
+            f"departments list: {permitted_depts}."
+        )
+
+    return {
+        "access_granted": access_granted,
+        "user_role": user_role_norm,
+        "user_rank": user_rank,
+        "required_rank": required_rank,
+        "classification_tier": tier,
+        "routing_action": action,
+        "is_redacted": is_redacted,
+        "permitted_departments": permitted_depts,
+        "reason": reason,
+        "document_name": doc_name,
+    }
+
+
+@app.get("/api/documents/{doc_name}/entitlements")
+def get_document_entitlements(doc_name: str):
+    """Retrieves companion entitlements sidecar manifest for a specific document."""
+    safe_name = os.path.basename(doc_name)
+    sidecar_path = QUARANTINE_DIR / f"{safe_name}.entitlements.json"
+    if not sidecar_path.exists():
+        raise HTTPException(status_code=404, detail=f"No entitlements sidecar found for {safe_name}")
+    try:
+        data = json.loads(sidecar_path.read_text(encoding="utf-8"))
+        return {
+            "document_name": safe_name,
+            "sidecar_file": sidecar_path.name,
+            "entitlements": data,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read sidecar file: {e}")
 
 
 # ==============================================================================

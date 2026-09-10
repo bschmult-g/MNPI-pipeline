@@ -51,7 +51,10 @@ class MNPIComplianceAgentRuntime:
         2. Agent 2 (Decision Authority): Evaluates 4 legal tests and logs to BigQuery.
         """
         content = text or prompt or input or ""
-        from workflow import run_pipeline
+        try:
+            from app.workflow import run_pipeline
+        except ImportError:
+            from workflow import run_pipeline
 
         dossier, verdict = run_pipeline(
             text=content,

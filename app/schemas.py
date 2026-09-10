@@ -257,6 +257,86 @@ class CriteriaAssessment(BaseModel):
     rationale: str = Field(description="Reasoning grounded in jurisprudence, facts, and legal standards")
 
 
+# ==============================================================================
+# Enterprise Security & Entitlements Tag Schema
+# ==============================================================================
+
+class SecurityEntitlementsTag(BaseModel):
+    """Indexable document security tag and hierarchical access entitlements manifest.
+
+    Designed for O(1) query filtering across downstream data stores (BigQuery RLS,
+    GCS object metadata, Vertex AI Search, and enterprise vector databases).
+    """
+    tag_version: str = Field(default="1.0", description="Schema version of the entitlements tag")
+    document_id: str = Field(description="Document filename or unique identifier")
+    classification_tier: Literal[
+        "MNPI_CRITICAL",
+        "MNPI_HIGH",
+        "INTERNAL_CONFIDENTIAL",
+        "PUBLIC_UNRESTRICTED"
+    ] = Field(description="Normalized enterprise classification tier")
+    clearance_rank: int = Field(
+        ge=1,
+        le=4,
+        description="Hierarchical clearance rank: 1=Public, 2=Internal Analyst, 3=Senior Associate, 4=VP / Legal Counsel"
+    )
+    min_role_required: Literal[
+        "ANY",
+        "ANALYST",
+        "SENIOR_ASSOCIATE",
+        "VICE_PRESIDENT",
+        "LEGAL_COMPLIANCE"
+    ] = Field(description="Minimum job role required to access unredacted source content")
+    permitted_departments: List[str] = Field(
+        default_factory=list,
+        description="List of enterprise departments permitted access (e.g. INVESTMENT_BANKING, LEGAL, COMPLIANCE)"
+    )
+    permitted_groups: List[str] = Field(
+        default_factory=list,
+        description="Directory/IAM groups entitled to access (e.g. grp-mnpi-cleared-vp, grp-compliance-officers)"
+    )
+    ticker_restrictions: List[str] = Field(
+        default_factory=list,
+        description="Associated stock tickers subject to trading blackout or watch list"
+    )
+    routing_action: Literal[
+        "BLOCK_COMMUNICATION",
+        "REDACT_AND_PROCEED",
+        "ESCALATE_TO_COMPLIANCE",
+        "APPROVE_RELEASE"
+    ] = Field(description="Automated routing and gateway enforcement directive")
+    is_redacted: bool = Field(
+        default=False,
+        description="True if unredacted content was stripped/sanitized for lower clearance tiers"
+    )
+    audit_hash: Optional[str] = Field(
+        default=None,
+        description="Cryptographic SHA-256 audit digest binding document content to this tag"
+    )
+    created_at: Optional[str] = Field(
+        default=None,
+        description="ISO 8601 UTC timestamp of tag generation"
+    )
+
+    def to_gcs_metadata(self) -> Dict[str, str]:
+        """Converts entitlement attributes to GCS object custom metadata string key-values."""
+        return {
+            "mnpi-tag-version": self.tag_version,
+            "mnpi-classification": self.classification_tier,
+            "mnpi-clearance-rank": str(self.clearance_rank),
+            "mnpi-min-role": self.min_role_required,
+            "mnpi-routing-action": self.routing_action,
+            "mnpi-is-redacted": str(self.is_redacted).lower(),
+            "mnpi-audit-hash": self.audit_hash or "",
+            "mnpi-tickers": ",".join(self.ticker_restrictions),
+            "mnpi-departments": ",".join(self.permitted_departments),
+        }
+
+    def to_manifest_dict(self) -> Dict[str, Any]:
+        """Exports complete structured JSON envelope for sidecar storage and BigQuery ingestion."""
+        return self.model_dump()
+
+
 class ArbiterVerdict(BaseModel):
     """Final decision rendered by the MPNI Agent Arbiter (Decision Authority)."""
     verdict: Literal["MNPI_CONFIRMED", "POTENTIAL_MNPI", "PUBLIC_NON_MATERIAL", "CLEARED"] = Field(
@@ -307,4 +387,9 @@ class ArbiterVerdict(BaseModel):
     summary_justification: str = Field(
         description="Official executive compliance justification for audit logs"
     )
+    entitlements: Optional[SecurityEntitlementsTag] = Field(
+        default=None,
+        description="Indexable document security tag and hierarchical access entitlements manifest"
+    )
+
 

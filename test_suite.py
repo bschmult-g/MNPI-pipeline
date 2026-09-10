@@ -17,6 +17,10 @@ from tests.unit.test_rl_causal_v2 import (
     TestDPOPreferenceDatasetBuilder,
     TestStandardizedVerificationCodes,
 )
+from tests.unit.test_security_entitlements import (
+    TestSecurityEntitlementsTagging,
+    TestEntitlementsApiAndSidecar,
+)
 
 __all__ = [
     "TestMNPIComplianceSystem",
@@ -27,6 +31,8 @@ __all__ = [
     "TestComplianceRewardEngine",
     "TestDPOPreferenceDatasetBuilder",
     "TestStandardizedVerificationCodes",
+    "TestSecurityEntitlementsTagging",
+    "TestEntitlementsApiAndSidecar",
 ]
 
 if __name__ == "__main__":
