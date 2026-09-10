@@ -228,6 +228,16 @@
     }
   }
 
+  function escapeHtml(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
   function createTextElement(tag, text, className) {
     const el = document.createElement(tag);
     el.textContent = text || "";
