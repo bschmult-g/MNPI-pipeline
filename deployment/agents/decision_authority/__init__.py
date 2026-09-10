@@ -1,5 +1,8 @@
 """MNPI Decision Authority Agent Package."""
-from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+try:
+    from .runtime import MNPIDecisionAuthorityRuntime
+except ImportError:
+    from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
 
 try:
     from .agent import app, root_agent

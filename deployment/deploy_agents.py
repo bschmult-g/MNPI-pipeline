@@ -31,8 +31,12 @@ from google.oauth2.credentials import Credentials
 import vertexai
 from vertexai.preview import reasoning_engines
 
-from agents.fact_checker.runtime import MNPIFactCheckerRuntime
-from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+try:
+    from deployment.agents.fact_checker.runtime import MNPIFactCheckerRuntime
+    from deployment.agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+except ImportError:
+    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+    from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("deploy_agents")

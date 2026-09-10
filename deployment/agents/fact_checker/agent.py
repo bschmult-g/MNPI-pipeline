@@ -10,11 +10,17 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+try:
+    from deployment.agents.fact_checker.runtime import MNPIFactCheckerRuntime
+except ImportError:
+    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
 
 try:
     from google.adk.apps import App
-    from fact_checker_agent import create_fact_checker_agent
+    try:
+        from app.agents.fact_checker import create_fact_checker_agent
+    except ImportError:
+        from fact_checker_agent import create_fact_checker_agent
     root_agent = create_fact_checker_agent()
     app = App(
         name="mnpi_fact_checker_agent",

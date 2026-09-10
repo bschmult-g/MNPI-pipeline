@@ -10,11 +10,17 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+try:
+    from deployment.agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+except ImportError:
+    from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
 
 try:
     from google.adk.apps import App
-    from arbiter_agent import create_arbiter_agent
+    try:
+        from app.agents.arbiter import create_arbiter_agent
+    except ImportError:
+        from arbiter_agent import create_arbiter_agent
     root_agent = create_arbiter_agent()
     app = App(
         name="mnpi_decision_authority_agent",

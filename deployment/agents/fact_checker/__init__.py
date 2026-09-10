@@ -1,5 +1,8 @@
 """MNPI Fact Checker Agent Package."""
-from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+try:
+    from .runtime import MNPIFactCheckerRuntime
+except ImportError:
+    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
 
 try:
     from .agent import app, root_agent
