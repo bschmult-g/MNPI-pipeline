@@ -443,6 +443,13 @@
 
       const nameEl = createTextElement("div", file.filename, "gcs-file-name");
       nameEl.title = file.gcs_uri;
+      if (file.has_entitlements) {
+        const tagBadge = document.createElement("span");
+        tagBadge.className = "file-tag-badge";
+        tagBadge.textContent = "🏷️ Tagged";
+        tagBadge.title = "Security & classification sidecar manifest attached";
+        nameEl.appendChild(tagBadge);
+      }
       meta.appendChild(nameEl);
 
       const subEl = createTextElement(
@@ -509,6 +516,18 @@
         dom.gcsUploadStatus.textContent = "Loaded from GCS: " + data.gcs_uri + " (" + data.bytes + " bytes)";
         dom.gcsUploadStatus.classList.remove("hidden");
       }
+
+      // Attempt to load existing entitlements tag if attached
+      try {
+        const entRes = await fetch("/api/documents/" + encodeURIComponent(data.filename) + "/entitlements");
+        if (entRes.ok) {
+          const entData = await entRes.json();
+          renderEntitlementsTag({
+            verdict: { entitlements: entData.entitlements },
+            sidecar_file: { filename: entData.sidecar_file, exists: true }
+          });
+        }
+      } catch (_) {}
     } catch (err) {
       if (dom.gcsUploadStatus) {
         dom.gcsUploadStatus.className = "upload-status-box";

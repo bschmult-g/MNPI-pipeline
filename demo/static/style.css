@@ -502,6 +502,22 @@ body {
   white-space: nowrap;
 }
 
+.file-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-left: 0.5rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  letter-spacing: 0.3px;
+  vertical-align: middle;
+}
+
 .gcs-file-sub {
   font-size: 0.68rem;
   color: var(--text-muted);
