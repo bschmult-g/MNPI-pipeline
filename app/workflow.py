@@ -399,9 +399,17 @@ def run_offline_arbiter(dossier: FactCheckingDossier) -> ArbiterVerdict:
 # ==============================================================================
 
 def get_genai_client() -> Optional[Any]:
-    """Returns an authenticated google.genai.Client for Vertex AI in the US region."""
+    """Returns an authenticated google.genai.Client for Vertex AI or Google AI Studio."""
     from google import genai
     from google.genai.types import HttpOptions
+
+    # 0. Direct API Key (AI Studio)
+    api_key = os.getenv("GEMINI_API_KEY")
+    if api_key:
+        try:
+            return genai.Client(api_key=api_key)
+        except Exception as err:
+            logger.debug(f"API key initialization notice: {err}")
 
     # 1. Standard Application Default Credentials (ADC) with quota project and auto-refresh
     try:
