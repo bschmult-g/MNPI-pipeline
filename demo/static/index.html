@@ -44,6 +44,11 @@
       <span>BigQuery Table Explorer</span>
       <span id="nav-bq-badge" class="nav-badge">Live BQ Table</span>
     </button>
+    <button id="nav-btn-rl" class="main-nav-btn">
+      <span class="nav-icon">&#129504;</span>
+      <span>Reinforcement Learning Architecture</span>
+      <span class="nav-badge" style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid #3b82f6;">v2.0 RL &amp; LOO</span>
+    </button>
   </nav>
 
   <!-- VIEW 1: INGESTION & ARBITRATION PIPELINE -->
@@ -287,7 +292,10 @@
           <!-- RL Reward Multi-Objective Shaping -->
           <div class="rl-section">
             <div class="sub-header-row">
-              <span class="sub-header-title">RL Compliance Reward:</span>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span class="sub-header-title">RL Compliance Reward:</span>
+                <button id="btn-open-rl-guide" class="btn-guide-link" title="Open Reinforcement Learning Architecture Guide">&#129504; How RL Works &rarr;</button>
+              </div>
               <span id="rl-total-badge" class="badge-chip total-reward-badge">R_total: -</span>
             </div>
             <div class="rl-chips-row">
@@ -567,6 +575,197 @@ LIMIT 50;</pre>
       </div>
     </div>
   </div><!-- /view-bigquery -->
+
+  <!-- VIEW 3: REINFORCEMENT LEARNING & CAUSAL ATTRIBUTION GUIDE -->
+  <div id="view-rl-explainer" class="app-view hidden">
+    <div class="rl-guide-container">
+      <!-- HERO HEADER -->
+      <div class="rl-guide-hero">
+        <div class="rl-hero-badge">Reinforcement Learning Architecture v2.0</div>
+        <h1>How Reinforcement Learning &amp; Causal Attribution Work</h1>
+        <p class="rl-hero-subtitle">
+          Eliminating the dual dilemma of autonomous compliance: preventing catastrophic insider trading leaks
+          while eradicating hyper-conservative false alarms on verified public news.
+        </p>
+      </div>
+
+      <!-- THREE CORE PILLARS GRID -->
+      <div class="rl-pillars-grid">
+        <div class="rl-pillar-card">
+          <div class="pillar-icon">⚖️</div>
+          <h3>1. Multi-Objective Reward Shaping</h3>
+          <p>
+            The Decision Authority Arbiter is scored on a multi-term reward model: rewarding correct leak neutralization while heavily penalizing unredacted dissemination (<span class="code-text">&lambda;<sub>veto</sub> = -10.0</span>) and false-positive over-blocking (<span class="code-text">R<sub>fp</sub> = -4.0</span>).
+          </p>
+        </div>
+        <div class="rl-pillar-card">
+          <div class="pillar-icon">🔍</div>
+          <h3>2. Causal Attribution Engine (LOO)</h3>
+          <p>
+            Counterfactual Leave-One-Out (LOO) ablation isolates sensitive data signals (<span class="code-text">S<sub>influence</sub></span>) from prompt context (<span class="code-text">U</span>). Multi-leak cluster ablation resolves causal overdetermination.
+          </p>
+        </div>
+        <div class="rl-pillar-card">
+          <div class="pillar-icon">🚀</div>
+          <h3>3. DPO Margin Filtering (&Delta;R &ge; 2.5)</h3>
+          <p>
+            Direct Preference Optimization pairs <span class="code-text">(y<sub>win</sub>, y<sub>lose</sub>)</span> are filtered by minimum reward margin to guarantee high-leverage fine-tuning stability and eliminate noisy feedback.
+          </p>
+        </div>
+      </div>
+
+      <!-- SECTION: THE REWARD FORMULA WALKTHROUGH -->
+      <div class="rl-section-card">
+        <div class="card-section-header">
+          <h2>The Compliance Reward Formula</h2>
+          <span class="formula-badge">Mathematical Objective Function</span>
+        </div>
+        <div class="formula-box">
+          <code>R<sub>total</sub> = R<sub>task</sub> + &lambda;<sub>veto</sub> &middot; &Iopf;(Veto) + &sum; w<sub>k</sub> &middot; CodePenalty(C<sub>k</sub>) - &gamma; &middot; S<sub>influence</sub> - R<sub>fp</sub></code>
+        </div>
+        <div class="formula-terms-grid">
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-name">R<sub>task</sub> = +1.0</span>
+              <span class="term-type reward">Task Baseline</span>
+            </div>
+            <p>Execution reward awarded for producing structured judicial rationale, applying the 4 legal criteria, and generating actionable routing directives.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-name">&lambda;<sub>veto</sub> = -10.0</span>
+              <span class="term-type penalty">Catastrophic Veto</span>
+            </div>
+            <p>Triggered whenever actual Material Non-Public Information is present in the source communication and the agent attempts to approve direct release.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-name">R<sub>fp</sub> = -4.0</span>
+              <span class="term-type penalty">Anti-Conservative Bias</span>
+            </div>
+            <p><strong>Fixes "Paranoid Agent" syndrome:</strong> Heavily penalizes the model if it blocks or redacts verified public news wires, SEC filings, or routine immaterial chatter.</p>
+          </div>
+          <div class="term-card">
+            <div class="term-header">
+              <span class="term-name">-&gamma; &middot; S<sub>influence</sub> (&gamma; = 2.0)</span>
+              <span class="term-type adjustment">Causal Penalty</span>
+            </div>
+            <p>Penalizes decisions where confidential insider intelligence drove the communication. Drops to zero when sensitive tokens are properly redacted or blocked.</p>
+          </div>
+          <div class="term-card wide">
+            <div class="term-header">
+              <span class="term-name">&sum; w<sub>k</sub> &middot; CodePenalty(C<sub>k</sub>)</span>
+              <span class="term-type mixed">Machine Verification Codes</span>
+            </div>
+            <p>Standardized machine codes ensure granular, auditable evaluation across all 4 legal criteria:</p>
+            <div class="codes-demo-row">
+              <span class="code-pill violation">MAT_01_MARKET_MOVING_MA (-3.0)</span>
+              <span class="code-pill violation">MOSAIC_02_CONFIRMED_NON_PUBLIC (-2.0)</span>
+              <span class="code-pill violation">DUTY_01_EXPLICIT_SECRECY_MARKER (-2.5)</span>
+              <span class="code-pill violation">HARM_01_FRONT_RUNNING_EXPOSURE (-3.0)</span>
+              <span class="code-pill cleared">MAT_CLEARED_DE_MINIMIS (+1.0)</span>
+              <span class="code-pill cleared">MOSAIC_01_VERIFIED_PUBLIC_WIRE (+1.5)</span>
+              <span class="code-pill cleared">DUTY_CLEARED_EXTERNAL_SOURCE (+1.0)</span>
+              <span class="code-pill cleared">HARM_CLEARED_BENIGN (+1.0)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION: CAUSAL ATTRIBUTION & OVERDETERMINATION -->
+      <div class="rl-section-card">
+        <div class="card-section-header">
+          <h2>Causal Attribution Engine &amp; Counterfactual Ablation</h2>
+          <span class="formula-badge">Leave-One-Out (LOO) v2.0</span>
+        </div>
+        <div class="causal-explainer-grid">
+          <div class="causal-box">
+            <h3>⚡ Hierarchical Gating Rule (Latency Optimization)</h3>
+            <p>Running LLM ablations on every communication adds token latency and API cost. We implement a confidence pre-filter:</p>
+            <ul class="gating-list">
+              <li><strong>S<sub>full</sub> &lt; 0.40:</strong> Cleared as public / benign. <em>Ablation skipped</em> (saves ~65% latency).</li>
+              <li><strong>S<sub>full</sub> &gt; 0.85:</strong> Violation is decisively certain. <em>Ablation skipped</em> to conserve cost.</li>
+              <li><strong>0.40 &le; S<sub>full</sub> &le; 0.85:</strong> <em>Borderline Confidence Zone</em>. Triggers deep counterfactual ablation.</li>
+            </ul>
+          </div>
+          <div class="causal-box">
+            <h3>🧩 Multi-Leak Causal Overdetermination</h3>
+            <p>If a leaked document contains both an internal codename (<em>"Project Titan"</em>) and an acquisition value (<em>"$2.4B"</em>), single-token LOO fails because masking either token leaves the other active (producing an artificially low &Delta;S).</p>
+            <div class="formula-callout">
+              <code>S<sub>joint</sub> = P(Violation | Prompt + &Copf;) - P(Violation | Prompt + &empty;)</code>
+            </div>
+            <p>When individual deltas are masked but cluster ablation drops violation to zero, the engine flags <strong>is_overdetermined = True</strong> and confirms causal dominance.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION: REAL-WORLD SCENARIOS COMPARISON -->
+      <div class="rl-section-card">
+        <div class="card-section-header">
+          <h2>Side-by-Side Reward Comparison</h2>
+          <span class="formula-badge">DPO Selection Condition: &Delta;R &ge; 2.5</span>
+        </div>
+        <div class="scenarios-comparison-grid">
+          <!-- Scenario 1 -->
+          <div class="scenario-box">
+            <div class="scenario-badge critical">Scenario A: Confidential M&A Leak</div>
+            <blockquote class="scenario-quote">
+              "Don't share this yet, but we are finalizing Project Titan to acquire TechCo for $2.4B next Tuesday..."
+            </blockquote>
+            <div class="agent-outcomes">
+              <div class="outcome winning">
+                <div class="outcome-tag">Winning Decision (y<sub>win</sub>)</div>
+                <div class="outcome-verdict">MNPI_CONFIRMED &rarr; BLOCK_COMMUNICATION</div>
+                <div class="outcome-score">Reward: <strong class="pos">+5.00</strong></div>
+                <p class="outcome-desc">Properly catches secrecy marker, verifies non-public status, assigns MAT_01, blocks and redacts leak.</p>
+              </div>
+              <div class="outcome losing">
+                <div class="outcome-tag">Losing Decision (y<sub>lose</sub>)</div>
+                <div class="outcome-verdict">CLEARED &rarr; APPROVE_RELEASE</div>
+                <div class="outcome-score">Reward: <strong class="neg">-14.80</strong></div>
+                <p class="outcome-desc">Catastrophic failure. Triggers &lambda;<sub>veto</sub> (-10.0), code penalties (-3.8), and causal influence penalty.</p>
+              </div>
+            </div>
+            <div class="margin-banner">
+              Reward Margin: <strong>&Delta;R = +5.00 - (-14.80) = +19.80</strong> (&ge; 2.5 &rarr; Accepted into DPO Dataset)
+            </div>
+          </div>
+
+          <!-- Scenario 2 -->
+          <div class="scenario-box">
+            <div class="scenario-badge safe">Scenario B: Routine Public Press Release</div>
+            <blockquote class="scenario-quote">
+              "Target publicly reported Q2 financial results on August 21, confirming 2.7% comparable sales growth..."
+            </blockquote>
+            <div class="agent-outcomes">
+              <div class="outcome winning">
+                <div class="outcome-tag">Winning Decision (y<sub>win</sub>)</div>
+                <div class="outcome-verdict">CLEARED &rarr; APPROVE_RELEASE</div>
+                <div class="outcome-score">Reward: <strong class="pos">+5.50</strong></div>
+                <p class="outcome-desc">Accurately identifies public Form 8-K distribution, assigns MOSAIC_01, approves communication without unnecessary delay.</p>
+              </div>
+              <div class="outcome losing">
+                <div class="outcome-tag">Losing Decision (y<sub>lose</sub>)</div>
+                <div class="outcome-verdict">MNPI_CONFIRMED &rarr; BLOCK_COMMUNICATION</div>
+                <div class="outcome-score">Reward: <strong class="neg">-8.00</strong></div>
+                <p class="outcome-desc">Hyper-conservative false alarm. Triggers R<sub>fp</sub> (-4.0) False Positive penalty for over-blocking public news.</p>
+              </div>
+            </div>
+            <div class="margin-banner">
+              Reward Margin: <strong>&Delta;R = +5.50 - (-8.00) = +13.50</strong> (&ge; 2.5 &rarr; Accepted into DPO Dataset)
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RETURN / TRY LIVE PIPELINE CALLOUT -->
+      <div style="text-align: center; margin-top: 36px; padding-bottom: 24px;">
+        <button id="btn-rl-back-to-pipeline" class="btn btn-primary" style="padding: 12px 28px; font-size: 15px; border-radius: 8px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);">
+          &#9881; Return to Live Pipeline &amp; Test Documents
+        </button>
+      </div>
+    </div>
+  </div><!-- /view-rl-explainer -->
 
   <!-- AUDIT DETAIL MODAL -->
   <div id="audit-modal" class="modal-overlay hidden">

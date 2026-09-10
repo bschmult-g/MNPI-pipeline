@@ -128,9 +128,13 @@
     // Primary View Navigation
     navBtnPipeline: document.getElementById("nav-btn-pipeline"),
     navBtnBigQuery: document.getElementById("nav-btn-bigquery"),
+    navBtnRl: document.getElementById("nav-btn-rl"),
     navBqBadge: document.getElementById("nav-bq-badge"),
     viewPipeline: document.getElementById("view-pipeline"),
     viewBigQuery: document.getElementById("view-bigquery"),
+    viewRlExplainer: document.getElementById("view-rl-explainer"),
+    btnOpenRlGuide: document.getElementById("btn-open-rl-guide"),
+    btnRlBackToPipeline: document.getElementById("btn-rl-back-to-pipeline"),
 
     // BigQuery Explorer Controls & Panes
     btnRefreshBqExplorer: document.getElementById("btn-refresh-bq-explorer"),
@@ -1366,24 +1370,51 @@
   // Navigation & Sub-Tabs Event Bindings
   // ============================================================================
 
-  // Primary View Navigation (Pipeline vs. BigQuery Explorer)
+  // Primary View Navigation (Pipeline vs. BigQuery Explorer vs. Reinforcement Learning)
+  function switchMainView(viewName) {
+    if (dom.navBtnPipeline) dom.navBtnPipeline.classList.toggle("active", viewName === "pipeline");
+    if (dom.navBtnBigQuery) dom.navBtnBigQuery.classList.toggle("active", viewName === "bigquery");
+    if (dom.navBtnRl) dom.navBtnRl.classList.toggle("active", viewName === "rl");
+
+    if (dom.viewPipeline) dom.viewPipeline.classList.toggle("hidden", viewName !== "pipeline");
+    if (dom.viewBigQuery) dom.viewBigQuery.classList.toggle("hidden", viewName !== "bigquery");
+    if (dom.viewRlExplainer) dom.viewRlExplainer.classList.toggle("hidden", viewName !== "rl");
+
+    if (viewName === "bigquery") {
+      loadAuditLogs();
+      loadAuditSchema();
+    }
+  }
+
   if (dom.navBtnPipeline) {
     dom.navBtnPipeline.addEventListener("click", function () {
-      dom.navBtnPipeline.classList.add("active");
-      dom.navBtnBigQuery.classList.remove("active");
-      dom.viewPipeline.classList.remove("hidden");
-      dom.viewBigQuery.classList.add("hidden");
+      switchMainView("pipeline");
     });
   }
 
   if (dom.navBtnBigQuery) {
     dom.navBtnBigQuery.addEventListener("click", function () {
-      dom.navBtnBigQuery.classList.add("active");
-      dom.navBtnPipeline.classList.remove("active");
-      dom.viewBigQuery.classList.remove("hidden");
-      dom.viewPipeline.classList.add("hidden");
-      loadAuditLogs();
-      loadAuditSchema();
+      switchMainView("bigquery");
+    });
+  }
+
+  if (dom.navBtnRl) {
+    dom.navBtnRl.addEventListener("click", function () {
+      switchMainView("rl");
+    });
+  }
+
+  if (dom.btnOpenRlGuide) {
+    dom.btnOpenRlGuide.addEventListener("click", function () {
+      switchMainView("rl");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }
+
+  if (dom.btnRlBackToPipeline) {
+    dom.btnRlBackToPipeline.addEventListener("click", function () {
+      switchMainView("pipeline");
+      window.scrollTo({ top: 0, behavior: "smooth" });
     });
   }
 
