@@ -630,18 +630,27 @@
     const originalBtnText = btnTextSpan ? btnTextSpan.textContent : "⚙ Process with Two-Agent Platform";
 
     const progressSteps = [
-      "🕵️ Step 1/3: Fact Checker extracting entities & codenames...",
-      "🔍 Step 1/3: Checking public wire releases & secrecy markers...",
-      "⚖️ Step 2/3: Arbiter scoring Materiality & Mosaic tests...",
-      "🛡️ Step 2/3: Evaluating Source/Duty & Actionability harm...",
-      "📊 Step 3/3: Streaming compliance integrity hash to BigQuery...",
+      "🕵️ Step 1/3: Fact Checker extracting entities & codenames",
+      "🔍 Step 1/3: Checking public wire releases & secrecy markers",
+      "⚖️ Step 2/3: Arbiter scoring Materiality & Mosaic tests",
+      "🛡️ Step 2/3: Evaluating Source/Duty & Actionability harm",
+      "📊 Step 3/3: Streaming compliance integrity hash to BigQuery",
     ];
+    let elapsedSec = 0;
     let stepIndex = 0;
-    if (btnTextSpan) btnTextSpan.textContent = progressSteps[0];
+    const updateButtonText = () => {
+      if (btnTextSpan) {
+        btnTextSpan.textContent = `${progressSteps[stepIndex]} (${elapsedSec}s elapsed)`;
+      }
+    };
+    updateButtonText();
     const progressInterval = setInterval(() => {
-      stepIndex = (stepIndex + 1) % progressSteps.length;
-      if (btnTextSpan) btnTextSpan.textContent = progressSteps[stepIndex];
-    }, 3200);
+      elapsedSec++;
+      if (elapsedSec % 4 === 0) {
+        stepIndex = (stepIndex + 1) % progressSteps.length;
+      }
+      updateButtonText();
+    }, 1000);
 
     try {
       const res = await fetch("/api/process", {

@@ -1,5 +1,25 @@
 [
   {
+    "timestamp": "2026-09-10T15:34:59.790976+00:00",
+    "document_name": "BNY-_AGY_talk_track_-_2026_09_03_09_30_CDT_-_Notes_by_Gemini.pdf",
+    "channel": "email",
+    "verdict": "MNPI_CONFIRMED",
+    "risk_level": "HIGH",
+    "recommended_action": "BLOCK_COMMUNICATION",
+    "materiality_score": 0.78,
+    "public_availability_score": 0.95,
+    "source_duty_score": 0.88,
+    "harm_score": 0.82,
+    "entities_detected": "",
+    "triggers_detected": "",
+    "has_secrecy_markers": false,
+    "audit_hash": "sha256:b469b7573f59ca5ffb35e26f6bf853b9060077a8ee1d59d592d288ba3412831a",
+    "summary_justification": "AUDIT DETERMINATION: MNPI_CONFIRMED. This transcript records an internal Google technical sales engagement regarding tier-1 client Bank of New York Mellon (BNY). The transcript contains material, strictly non-public business information, notably: (1) pending execution of an unannounced commercial commit renewal and expansion within weeks; (2) confirmation of BNY as a confidential pilot launch customer for the unannounced 'Financial Research Agent (FRA)' product; (3) unreleased product designations ('Flash 3738'); and (4) proprietary architecture and internal vendor growth metrics ('Eliza', 400% Anthropic surge). Disclosure violates standard contractual confidentiality obligations and presents front-running and competitive harm risks. Under Basic Inc. v. Levinson and SEC Rule 10b-5 standards, external distribution must be BLOCKED.",
+    "redacted_preview": "Sep 3, 2026 BNY- [REDACTED MNPI CONTENT] talk track - Transcript 00:00:00 Luis Redondo: Enterprise Plus licenses. So, hey, you know, you have [REDACTED MNPI CONTENT] as part of those licenses. So, you guys should explore leveraging it as part of that um you know, that agreement. Brian Schmult: Excellent. Luis Redondo: A and so that does two things for us. one is embeds it makes us stickier uh in terms of like our integration into their ecosystem but also as they continue to grow their Gemini ent",
+    "latency_ms": 63158.12,
+    "model_used": "gemini-3.8-flash"
+  },
+  {
     "timestamp": "2026-09-10T15:28:13.622991+00:00",
     "document_name": "Security__FS_Industries_plan_for_Rohit___-_2026_09_03_15_31_EDT_-_Notes_by_Gemini.pdf",
     "channel": "email",
