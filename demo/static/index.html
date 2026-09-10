@@ -800,6 +800,16 @@ LIMIT 50;</pre>
                 <span class="slider-desc">Execution reward for completing judicial protocol.</span>
                 <span>+5.0</span>
               </div>
+              <div class="slider-impact-guide">
+                <div class="impact-item impact-left">
+                  <span class="impact-label">◂ Slide Left (0.0):</span>
+                  <span class="impact-desc">Reduces base cushion; compliance penalties heavily dominate the final score.</span>
+                </div>
+                <div class="impact-item impact-right">
+                  <span class="impact-label">Slide Right (+5.0) ▸:</span>
+                  <span class="impact-desc">Inflates base reward; can overpower moderate compliance penalties.</span>
+                </div>
+              </div>
             </div>
 
             <!-- Slider 2: lambda_veto -->
@@ -815,6 +825,16 @@ LIMIT 50;</pre>
                 <span>-25.0</span>
                 <span class="slider-desc">Catastrophic penalty for leaking unredacted MNPI.</span>
                 <span>0.0</span>
+              </div>
+              <div class="slider-impact-guide">
+                <div class="impact-item impact-left">
+                  <span class="impact-label">◂ Slide Left (-25.0):</span>
+                  <span class="impact-desc">Extreme zero-tolerance; crushes leaked approvals in DPO training.</span>
+                </div>
+                <div class="impact-item impact-right">
+                  <span class="impact-label">Slide Right (0.0) ▸:</span>
+                  <span class="impact-desc">Disables leak veto; risks letting leaked codenames pass with positive scores.</span>
+                </div>
               </div>
             </div>
 
@@ -832,6 +852,16 @@ LIMIT 50;</pre>
                 <span class="slider-desc">Penalizes over-blocking verified public news.</span>
                 <span>0.0</span>
               </div>
+              <div class="slider-impact-guide">
+                <div class="impact-item impact-left">
+                  <span class="impact-label">◂ Slide Left (-15.0):</span>
+                  <span class="impact-desc">Strict anti-bias; penalizes paranoia and forces release of public/benign news.</span>
+                </div>
+                <div class="impact-item impact-right">
+                  <span class="impact-label">Slide Right (0.0) ▸:</span>
+                  <span class="impact-desc">Removes over-blocking penalty; encourages "block everything" behavior.</span>
+                </div>
+              </div>
             </div>
 
             <!-- Slider 4: gamma_causal -->
@@ -847,6 +877,16 @@ LIMIT 50;</pre>
                 <span>0.0</span>
                 <span class="slider-desc">Scales causal penalty: -&gamma; &middot; S<sub>influence</sub>.</span>
                 <span>8.0</span>
+              </div>
+              <div class="slider-impact-guide">
+                <div class="impact-item impact-left">
+                  <span class="impact-label">◂ Slide Left (0.0):</span>
+                  <span class="impact-desc">Ignores phrase causality; grades output without checking culprit words.</span>
+                </div>
+                <div class="impact-item impact-right">
+                  <span class="impact-label">Slide Right (8.0) ▸:</span>
+                  <span class="impact-desc">Amplifies causal penalty; strictly penalizes unmasked sensitive terms.</span>
+                </div>
               </div>
             </div>
 
@@ -864,6 +904,16 @@ LIMIT 50;</pre>
                 <span class="slider-desc">Required &Delta;R = R(y<sub>win</sub>) - R(y<sub>lose</sub>) for DPO dataset.</span>
                 <span>10.0</span>
               </div>
+              <div class="slider-impact-guide">
+                <div class="impact-item impact-left">
+                  <span class="impact-label">◂ Slide Left (0.5):</span>
+                  <span class="impact-desc">Looser filter; admits more training pairs, but risks subtle or noisy contrasts.</span>
+                </div>
+                <div class="impact-item impact-right">
+                  <span class="impact-label">Slide Right (10.0) ▸:</span>
+                  <span class="impact-desc">Ultra-strict filter; curates high-contrast pairs only, but discards nuanced cases.</span>
+                </div>
+              </div>
             </div>
 
             <!-- Slider 6: MAT_01 Code Weight -->
@@ -879,6 +929,16 @@ LIMIT 50;</pre>
                 <span>-10.0</span>
                 <span class="slider-desc">Weight penalty for unredacted M&amp;A deal disclosure.</span>
                 <span>0.0</span>
+              </div>
+              <div class="slider-impact-guide">
+                <div class="impact-item impact-left">
+                  <span class="impact-label">◂ Slide Left (-10.0):</span>
+                  <span class="impact-desc">Near-veto severity; heavily penalizes unannounced M&amp;A/merger disclosures.</span>
+                </div>
+                <div class="impact-item impact-right">
+                  <span class="impact-label">Slide Right (0.0) ▸:</span>
+                  <span class="impact-desc">Softens specific M&amp;A penalty; relies primarily on broad task &amp; veto weights.</span>
+                </div>
               </div>
             </div>
           </div>

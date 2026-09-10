@@ -2351,6 +2351,49 @@ body {
   flex: 1;
 }
 
+.slider-impact-guide {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.35rem;
+  padding-top: 0.45rem;
+  border-top: 1px dashed rgba(71, 85, 105, 0.4);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.impact-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+}
+
+.impact-label {
+  font-weight: 600;
+  font-size: 0.68rem;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+}
+
+.impact-left .impact-label {
+  color: #93c5fd;
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.impact-right .impact-label {
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.impact-desc {
+  color: #cbd5e1;
+  flex: 1;
+}
+
 .tuner-action-bar {
   display: flex;
   justify-content: space-between;
