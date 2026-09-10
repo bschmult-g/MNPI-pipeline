@@ -613,21 +613,17 @@ Fact Checking Dossier:
             codes.append(test.code)
     verdict.verification_codes = codes
 
-    # Evaluate Causal Attribution via LOO / Joint Cluster Ablation if not present
-    if verdict.causal_attribution is None:
-        verdict.causal_attribution = JointAblationManager.evaluate_causal_attribution(
-            text=text,
-            dossier=dossier,
-            base_violation_score=verdict.materiality_test.score,
-        )
-
-    # Compute RL Multi-Objective Reward Metrics if not present
-    if verdict.rl_metrics is None:
-        verdict.rl_metrics = ComplianceRewardEngine.calculate_reward(
-            verdict=verdict,
-            dossier=dossier,
-            causal_attribution=verdict.causal_attribution,
-        )
+    # Always evaluate Causal Attribution and RL Multi-Objective Reward via authoritative engines
+    verdict.causal_attribution = JointAblationManager.evaluate_causal_attribution(
+        text=text,
+        dossier=dossier,
+        base_violation_score=verdict.materiality_test.score,
+    )
+    verdict.rl_metrics = ComplianceRewardEngine.calculate_reward(
+        verdict=verdict,
+        dossier=dossier,
+        causal_attribution=verdict.causal_attribution,
+    )
 
     return verdict
 
