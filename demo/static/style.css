@@ -1708,6 +1708,96 @@ body {
 }
 
 /* ==========================================================================
+   Plain English Executive Audit Briefing Box
+   ========================================================================== */
+.plain-english-section {
+  margin-top: 0.85rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.plain-badge {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.plain-english-card {
+  background: #090d16;
+  border: 1px solid #1e293b;
+  border-left: 3px solid #a855f7;
+  border-radius: 8px;
+  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  margin-top: 0.35rem;
+  transition: all 0.2s ease;
+}
+
+.plain-english-card.collapsed {
+  display: none;
+}
+
+.pe-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.pe-title {
+  font-weight: 700;
+  color: #f1f5f9;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+}
+
+.pe-text {
+  color: #94a3b8;
+  padding-left: 1.15rem;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.pe-text strong {
+  color: #e2e8f0;
+}
+
+.pe-alert-tag {
+  display: inline-block;
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 0.68rem;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+}
+
+.pe-alert-tag.veto {
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.pe-alert-tag.fp {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.pe-alert-tag.clean {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+/* ==========================================================================
    Reinforcement Learning Explainer Guide View Styles
    ========================================================================== */
 .rl-guide-container {

@@ -1,0 +1,14 @@
+{
+  "tag_version": "1.0",
+  "document_id": "rl_causal_arbiter_plan.md",
+  "classification_tier": "PUBLIC_UNRESTRICTED",
+  "clearance_rank": null,
+  "min_role_required": null,
+  "permitted_departments": [],
+  "permitted_groups": [],
+  "ticker_restrictions": [],
+  "routing_action": "APPROVE_RELEASE",
+  "is_redacted": true,
+  "audit_hash": "sha256:fcb6b9c4af6c956b22bca22905408fd77e45cc3501c721732375a5000c8cbd4a",
+  "created_at": "2026-09-10T17:47:25.474760+00:00"
+}

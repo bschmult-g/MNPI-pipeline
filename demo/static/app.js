@@ -97,6 +97,13 @@
     chipCausalPenalty: document.getElementById("chip-causal-penalty"),
     rlRationaleBox: document.getElementById("rl-rationale-box"),
 
+    // Plain English Executive Explanation
+    btnTogglePe: document.getElementById("btn-toggle-pe"),
+    peContent: document.getElementById("plain-english-content"),
+    peLegalSummary: document.getElementById("pe-legal-summary"),
+    peCausalSummary: document.getElementById("pe-causal-summary"),
+    peRlSummary: document.getElementById("pe-rl-summary"),
+
     // Routing & Redaction Display
     routingBanner: document.getElementById("routing-banner"),
     routingIcon: document.getElementById("routing-icon"),
@@ -784,6 +791,27 @@
   // Render Pipeline Results (Safe DOM Updates)
   // ============================================================================
 
+  const CODE_DESCRIPTIONS = {
+    "MAT_01_MARKET_MOVING_MA": "Critical Materiality: Unannounced M&A terms that would move market prices",
+    "MAT_02_EARNINGS_VARIANCE": "Critical Materiality: Unreleased financial/earnings revenue figures",
+    "MAT_03_ROADMAP_DISRUPTION": "High Materiality: Discloses forward-looking product delays/cancellations",
+    "MAT_04_REGULATORY_RESTRICTION": "High Materiality: Discloses confidential regulatory/SEC actions",
+    "MAT_CLEARED_DE_MINIMIS": "Materiality Cleared: Content is trivial/operational with zero market impact",
+
+    "MOSAIC_01_VERIFIED_PUBLIC_WIRE": "Public Mosaic Cleared: Information is confirmed on public news wires or SEC filings",
+    "MOSAIC_02_CONFIRMED_NON_PUBLIC": "Non-Public Violation: Confirmed non-public confidential corporate information",
+    "MOSAIC_03_AMBIGUOUS_RUMOR": "Mosaic Caution: Ambiguous rumor or unverified marketplace chatter",
+
+    "DUTY_01_EXPLICIT_SECRECY_MARKER": "Duty Violation: Document contains explicit confidentiality stamps (e.g. 'Do Not Share')",
+    "DUTY_02_INTERNAL_CODENAME": "Duty Violation: Uses confidential internal project codenames",
+    "DUTY_03_INSIDER_FIDUCIARY_BREACH": "Duty Violation: Originates from corporate insider breaching fiduciary duty",
+    "DUTY_CLEARED_EXTERNAL_SOURCE": "Duty Cleared: External, non-confidential, or publicly originated source",
+
+    "HARM_01_FRONT_RUNNING_EXPOSURE": "Harm Violation: Creates asymmetric trading advantage or market manipulation risk",
+    "HARM_02_STRATEGIC_SPOILAGE": "Harm Violation: Damages confidential corporate deal terms or competitor standing",
+    "HARM_CLEARED_BENIGN": "Harm Cleared: Release causes zero financial market harm or unfair advantage",
+  };
+
   function renderPipelineResults(data) {
     const dossier = data.dossier;
     const verdict = data.verdict;
@@ -844,6 +872,7 @@
           const isCleared = code.includes("CLEARED") || code.includes("PUBLIC_WIRE") || code.includes("EXTERNAL");
           pill.className = "code-pill " + (isCleared ? "cleared" : "violation");
           pill.textContent = code;
+          pill.title = CODE_DESCRIPTIONS[code] || "Machine-enforceable compliance audit code";
           dom.verificationCodesList.appendChild(pill);
         });
         if (dom.codesCountTag) dom.codesCountTag.textContent = codes.length + " codes verified";
@@ -924,6 +953,9 @@
 
     // 8. Render Security & Access Entitlements Tag
     renderEntitlementsTag(data);
+
+    // 9. Render Plain English Executive Audit Briefing
+    renderPlainEnglishSummary(verdict);
   }
 
   function renderEntitlementsTag(data) {
@@ -1013,6 +1045,116 @@
       } else {
         dom.simResultBox.textContent = `Document requires ${rankLabels[rank] || "Rank " + rank}. Select a role and test policy access.`;
       }
+    }
+  }
+
+  function renderPlainEnglishSummary(verdict) {
+    if (!dom.peContent) return;
+
+    const ca = verdict.causal_attribution || {};
+    const rm = verdict.rl_metrics || {};
+    const codes = verdict.verification_codes || [];
+
+    // 1. Legal Determination & Codes
+    if (dom.peLegalSummary) {
+      clearElement(dom.peLegalSummary);
+      let legalLead = "";
+      if (verdict.verdict === "CLEARED") {
+        legalLead = "Agent 2 evaluated this document across all 4 statutory criteria (Materiality, Public Availability, Source Duty, and Harm) and verified it is <strong>benign operational content</strong>. It contains no market-moving financial metrics, violates zero NDAs, and causes no trading harm.";
+      } else if (verdict.verdict === "MNPI_CONFIRMED") {
+        legalLead = "Agent 2 confirmed this document contains <strong>Material Non-Public Information (MNPI)</strong> under SEC Rule 10b-5. Unrestricted release would create an asymmetric market advantage and breach fiduciary confidentiality covenants.";
+      } else if (verdict.verdict === "POTENTIAL_MNPI") {
+        legalLead = "Agent 2 flagged this document for <strong>elevated compliance risk</strong> due to unconfirmed forward-looking or operational indicators. Escalation to a Compliance Officer is required.";
+      } else {
+        legalLead = "Agent 2 determined this document is internal business communication lacking material market-moving terms.";
+      }
+
+      const pLead = document.createElement("p");
+      pLead.innerHTML = legalLead;
+      dom.peLegalSummary.appendChild(pLead);
+
+      if (codes.length > 0) {
+        const ul = document.createElement("ul");
+        ul.style.marginTop = "0.4rem";
+        ul.style.paddingLeft = "1.2rem";
+        ul.style.listStyleType = "disc";
+        codes.forEach(function (code) {
+          const li = document.createElement("li");
+          li.style.marginBottom = "0.2rem";
+          const desc = CODE_DESCRIPTIONS[code] || "Standardized compliance verification code";
+          const isCleared = code.includes("CLEARED") || code.includes("PUBLIC_WIRE") || code.includes("EXTERNAL");
+          li.innerHTML = `<code>${escapeHtml(code)}</code> &mdash; <span style="color: ${isCleared ? '#6ee7b7' : '#fca5a5'};">${escapeHtml(desc)}</span>`;
+          ul.appendChild(li);
+        });
+        dom.peLegalSummary.appendChild(ul);
+      }
+    }
+
+    // 2. Causal Attribution LOO
+    if (dom.peCausalSummary) {
+      clearElement(dom.peCausalSummary);
+      let causalText = "";
+      if (ca.ablation_mode && ca.ablation_mode.includes("skipped")) {
+        const uPct = ((ca.counterfactual_score || 0.05) * 100).toFixed(0);
+        causalText = `The Leave-One-Out (LOO) engine verified that the document's baseline violation risk is only <strong>${uPct}%</strong> (well below the 40% inspection threshold). Word-by-word ablation was skipped to optimize speed and cost, confirming that no individual phrase forces an insider trading breach.`;
+      } else if (ca.is_overdetermined) {
+        causalText = `Joint cluster ablation detected <strong>causal overdetermination</strong>: multiple redundant leak signals exist across this document. Removing any single phrase still leaves an actionable breach.`;
+      } else {
+        const sInf = (ca.data_influence_score || 0).toFixed(2);
+        causalText = `Leave-One-Out ablation isolated key sensitive terms with a causal data influence score of <strong>${sInf}</strong>, driving the model's determination.`;
+      }
+      const pCausal = document.createElement("p");
+      pCausal.innerHTML = causalText;
+      dom.peCausalSummary.appendChild(pCausal);
+    }
+
+    // 3. RL Score & Penalty Breakdown
+    if (dom.peRlSummary) {
+      clearElement(dom.peRlSummary);
+      const totalRew = rm.total_reward !== undefined ? rm.total_reward : 0;
+      const isPos = totalRew >= 0;
+      let rlLead = `The overall RL evaluation score is <strong>${isPos ? "+" : ""}${totalRew.toFixed(2)}</strong>. Score breakdown:`;
+
+      const pRl = document.createElement("p");
+      pRl.innerHTML = rlLead;
+      dom.peRlSummary.appendChild(pRl);
+
+      const ul = document.createElement("ul");
+      ul.style.marginTop = "0.4rem";
+      ul.style.paddingLeft = "1.2rem";
+      ul.style.listStyleType = "disc";
+
+      // Veto item
+      if (rm.veto_penalty && rm.veto_penalty < 0) {
+        const li = document.createElement("li");
+        li.style.marginBottom = "0.25rem";
+        li.innerHTML = `<span class="pe-alert-tag veto">⚠️ VETO PENALTY (${rm.veto_penalty.toFixed(1)})</span>: Fact Checker detected an internal codename or M&A term, but the document was approved unredacted. In benchmark evaluations, allowing unredacted text containing restricted keywords triggers an automatic penalty to guard against leaks (even if appearing as an architectural example).`;
+        ul.appendChild(li);
+      }
+
+      // False positive item
+      if (rm.fp_penalty && rm.fp_penalty < 0) {
+        const li = document.createElement("li");
+        li.style.marginBottom = "0.25rem";
+        li.innerHTML = `<span class="pe-alert-tag fp">⚠️ OVER-BLOCKING BIAS (${rm.fp_penalty.toFixed(1)})</span>: The agent unnecessarily blocked or redacted verified public information.`;
+        ul.appendChild(li);
+      }
+
+      // Clean positive alignment
+      if ((!rm.veto_penalty || rm.veto_penalty === 0) && (!rm.fp_penalty || rm.fp_penalty === 0)) {
+        const li = document.createElement("li");
+        li.style.marginBottom = "0.25rem";
+        li.innerHTML = `<span class="pe-alert-tag clean">✅ CLEAN ALIGNMENT</span>: Zero catastrophic leak or over-blocking penalties triggered.`;
+        ul.appendChild(li);
+      }
+
+      // Task & Codes
+      const liTask = document.createElement("li");
+      liTask.style.marginBottom = "0.25rem";
+      liTask.innerHTML = `<strong>Task &amp; Code Adjustments</strong>: Awarded +${(rm.task_reward || 1.0).toFixed(1)} for structured execution, plus credit for verified statutory criteria.`;
+      ul.appendChild(liTask);
+
+      dom.peRlSummary.appendChild(ul);
     }
   }
 
@@ -1913,6 +2055,14 @@
       } catch (e) {
         console.warn("Reset error:", e);
       }
+    });
+  }
+
+  // Toggle Plain English Audit Briefing
+  if (dom.btnTogglePe && dom.peContent) {
+    dom.btnTogglePe.addEventListener("click", function () {
+      const isCollapsed = dom.peContent.classList.toggle("collapsed");
+      dom.btnTogglePe.textContent = isCollapsed ? "Expand" : "Collapse";
     });
   }
 

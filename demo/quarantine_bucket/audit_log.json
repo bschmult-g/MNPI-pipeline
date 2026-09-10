@@ -1,5 +1,27 @@
 [
   {
+    "timestamp": "2026-09-10T17:47:26.522505+00:00",
+    "document_name": "rl_causal_arbiter_plan.md",
+    "channel": "slack",
+    "verdict": "CLEARED",
+    "risk_level": "LOW",
+    "clearance_rank": null,
+    "entitlements_json": "{\"tag_version\": \"1.0\", \"document_id\": \"rl_causal_arbiter_plan.md\", \"classification_tier\": \"PUBLIC_UNRESTRICTED\", \"clearance_rank\": null, \"min_role_required\": null, \"permitted_departments\": [], \"permitted_groups\": [], \"ticker_restrictions\": [], \"routing_action\": \"APPROVE_RELEASE\", \"is_redacted\": true, \"audit_hash\": \"sha256:fcb6b9c4af6c956b22bca22905408fd77e45cc3501c721732375a5000c8cbd4a\", \"created_at\": \"2026-09-10T17:47:25.474760+00:00\"}",
+    "recommended_action": "APPROVE_RELEASE",
+    "materiality_score": 0.05,
+    "public_availability_score": 0.05,
+    "source_duty_score": 0.05,
+    "harm_score": 0.02,
+    "entities_detected": "",
+    "triggers_detected": "",
+    "has_secrecy_markers": false,
+    "audit_hash": "sha256:c1c0348ee35f66538fd76849dbe1e93a07a63abc83dcabca8970788156f4c78c",
+    "summary_justification": "The evaluated document is an internal software architecture implementation plan describing algorithmic reinforcement learning and causal counterfactual attribution enhancements for a compliance agent system. All detected sensitive terms ('M&A', 'EARNINGS_VARIANCE', 'leak') function purely as enum tokens and unit test labels rather than factual corporate events or financial disclosures. In compliance with the conservative bias prevention mandate, blocking or redacting benign technical documentation is strictly avoided to prevent false positive penalties. The communication is fully cleared for release.",
+    "redacted_preview": "# Implementation Plan: Reinforcement Learning & Causal Attribution (LOO) for MNPI Arbiter\n\n## Goal Description\nImplement a machine-enforceable verification and reinforcement learning (\"Trial-without-Error\") feedback framework for the **MNPI Decision Authority Arbiter**.\n\nThis enhancement upgrades the Arbiter across three core mathematical and architectural pillars:\n1. **Standardized Justification & Verification Codes**: Replace purely unstructured text rationales with machine-enforceable categor",
+    "latency_ms": 73271.99,
+    "model_used": "gemini-3.8-flash"
+  },
+  {
     "timestamp": "2026-09-10T17:34:40.844106+00:00",
     "document_name": "CI_Entitlements_Proof_Doc.txt",
     "channel": "slack",
