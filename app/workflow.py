@@ -552,11 +552,12 @@ Document to analyze:
     )
     return FactCheckingDossier.model_validate_json(resp.text)
 def run_live_arbiter(
-    dossier: FactCheckingDossier,
-    text: str,
+    client: Any = None,
+    text: str = "",
+    dossier: Optional[FactCheckingDossier] = None,
     model: Optional[str] = None,
-    client: Optional[Any] = None,
     weights: Optional[RewardWeightsConfig] = None,
+    **kwargs: Any,
 ) -> ArbiterVerdict:
     """Invokes the live Gemini model for the Decision Authority Arbiter agent.
     
@@ -571,9 +572,26 @@ def run_live_arbiter(
     """
     from google.genai.types import GenerateContentConfig
 
+    # Handle flexible parameter ordering
+    if isinstance(client, FactCheckingDossier):
+        actual_dossier = client
+        actual_text = text or ""
+        actual_client = kwargs.get("client") or (dossier if not isinstance(dossier, FactCheckingDossier) else None)
+    elif isinstance(dossier, FactCheckingDossier):
+        actual_dossier = dossier
+        actual_text = text or ""
+        actual_client = client
+    else:
+        actual_dossier = dossier
+        actual_text = text or ""
+        actual_client = client
+
+    if actual_dossier is None:
+        raise ValueError("FactCheckingDossier must be provided to run_live_arbiter")
+
     active_w = weights or get_active_weights()
     fp_penalty_display = active_w.false_positive_penalty
-    genai_client = client or get_genai_client()
+    genai_client = actual_client or get_genai_client()
 
     prompt = f"""You are the definitive MPNI Compliance Arbiter Agent (Decision Authority).
 Your role is to evaluate the provided Factual Dossier against the 4 Mandatory Assessment Criteria:
@@ -600,10 +618,10 @@ Requirements:
 - Summary Justification: Comprehensive legal compliance justification for audit manifest.
 
 Original Document:
-\"\"\"{text}\"\"\"
+\"\"\"{actual_text}\"\"\"
 
 Fact Checking Dossier:
-{dossier.model_dump_json(indent=2)}
+{actual_dossier.model_dump_json(indent=2)}
 """
 
     config = GenerateContentConfig(
@@ -633,13 +651,13 @@ Fact Checking Dossier:
 
     # Always evaluate Causal Attribution and RL Multi-Objective Reward via authoritative engines
     verdict.causal_attribution = JointAblationManager.evaluate_causal_attribution(
-        text=text,
-        dossier=dossier,
+        text=actual_text,
+        dossier=actual_dossier,
         base_violation_score=verdict.materiality_test.score,
     )
     verdict.rl_metrics = ComplianceRewardEngine.calculate_reward(
         verdict=verdict,
-        dossier=dossier,
+        dossier=actual_dossier,
         causal_attribution=verdict.causal_attribution,
         weights=weights,
     )
