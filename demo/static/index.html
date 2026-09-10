@@ -247,6 +247,58 @@
             <p class="crit-rationale" id="rationale-harm">Awaiting analysis...</p>
           </div>
         </div>
+
+        <!-- RL & CAUSAL ATTRIBUTION PANEL -->
+        <div class="rl-causal-container" id="rl-causal-section">
+          <!-- Standardized Verification Codes -->
+          <div class="codes-section">
+            <div class="sub-header-row">
+              <span class="sub-header-title">Machine Verification Codes:</span>
+              <span class="sub-header-tag" id="codes-count-tag">0 codes</span>
+            </div>
+            <div id="verification-codes-list" class="codes-pills-list">
+              <span class="code-pill empty">Awaiting arbitration...</span>
+            </div>
+          </div>
+
+          <!-- Causal Attribution & LOO Engine -->
+          <div class="causal-section">
+            <div class="sub-header-row">
+              <span class="sub-header-title">Causal Attribution Engine (LOO):</span>
+              <span id="causal-mode-badge" class="badge-chip">Heuristic Trigger</span>
+            </div>
+            <div class="causal-metrics-grid">
+              <div class="metric-card">
+                <span class="metric-label">Data Influence (S)</span>
+                <span id="metric-data-influence" class="metric-val">-</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Counterfactual (U)</span>
+                <span id="metric-prompt-influence" class="metric-val">-</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Overdetermined</span>
+                <span id="metric-overdetermined" class="metric-val">-</span>
+              </div>
+            </div>
+            <div id="causal-rationale-box" class="causal-rationale-text">Awaiting causal evaluation...</div>
+          </div>
+
+          <!-- RL Reward Multi-Objective Shaping -->
+          <div class="rl-section">
+            <div class="sub-header-row">
+              <span class="sub-header-title">RL Compliance Reward:</span>
+              <span id="rl-total-badge" class="badge-chip total-reward-badge">R_total: -</span>
+            </div>
+            <div class="rl-chips-row">
+              <span id="chip-task-reward" class="rl-chip">Task: +1.0</span>
+              <span id="chip-fp-penalty" class="rl-chip">R_fp (Bias): 0.0</span>
+              <span id="chip-veto-penalty" class="rl-chip">Veto: 0.0</span>
+              <span id="chip-causal-penalty" class="rl-chip">Causal Pen: 0.0</span>
+            </div>
+            <div id="rl-rationale-box" class="rl-rationale-text">Awaiting reward breakdown...</div>
+          </div>
+        </div>
       </div>
     </section>
 

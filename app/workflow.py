@@ -34,9 +34,15 @@ from app.schemas import (
     PublicCheckResult,
     TriggerDetectionResult,
     TriggerItem,
+    MaterialityCode,
+    MosaicCode,
+    DutyCode,
+    HarmCode,
 )
 from app.agents.fact_checker import create_fact_checker_agent
 from app.agents.arbiter import create_arbiter_agent
+from app.causal_engine import HierarchicalAblationTrigger, JointAblationManager
+from app.rl_engine import ComplianceRewardEngine
 from app.tools.entity_tools import check_restricted_or_internal_codename, resolve_ticker_and_status
 from app.tools.search_tools import detect_secrecy_markers, search_public_press_and_filings
 
@@ -362,37 +368,93 @@ def run_offline_arbiter(dossier: FactCheckingDossier) -> ArbiterVerdict:
         redacted = text
         justification = "CLEARED: Content lacks financial or operational materiality."
 
-    return ArbiterVerdict(
+    # Determine Standardized Machine Verification Codes
+    if is_ma or is_codename:
+        mat_code = MaterialityCode.MAT_01_MARKET_MOVING_MA.value
+    elif is_roadmap:
+        mat_code = MaterialityCode.MAT_03_ROADMAP_DISRUPTION.value
+    elif len(dossier.triggers.triggers) > 0:
+        mat_code = MaterialityCode.MAT_02_EARNINGS_VARIANCE.value
+    else:
+        mat_code = MaterialityCode.MAT_CLEARED_DE_MINIMIS.value
+
+    if dossier.public_check.is_publicly_verified:
+        pub_code = MosaicCode.MOSAIC_01_VERIFIED_PUBLIC_WIRE.value
+    elif dossier.public_check.verification_confidence > 0.4:
+        pub_code = MosaicCode.MOSAIC_03_AMBIGUOUS_RUMOR.value
+    else:
+        pub_code = MosaicCode.MOSAIC_02_CONFIRMED_NON_PUBLIC.value
+
+    if dossier.public_check.has_secrecy_markers:
+        src_code = DutyCode.DUTY_01_EXPLICIT_SECRECY_MARKER.value
+    elif is_codename:
+        src_code = DutyCode.DUTY_02_INTERNAL_CODENAME.value
+    else:
+        src_code = DutyCode.DUTY_CLEARED_EXTERNAL_SOURCE.value
+
+    if (is_ma or is_codename or dossier.public_check.has_secrecy_markers) and not dossier.public_check.is_publicly_verified:
+        harm_code = HarmCode.HARM_01_FRONT_RUNNING_EXPOSURE.value
+    elif mat_score >= 0.6 and not dossier.public_check.is_publicly_verified:
+        harm_code = HarmCode.HARM_02_STRATEGIC_SPOILAGE.value
+    else:
+        harm_code = HarmCode.HARM_CLEARED_BENIGN.value
+
+    verification_codes = [mat_code, pub_code, src_code, harm_code]
+
+    # Evaluate Causal Attribution via LOO / Joint Cluster Ablation
+    causal = JointAblationManager.evaluate_causal_attribution(
+        text=text,
+        dossier=dossier,
+        base_violation_score=mat_score,
+    )
+
+    draft_verdict = ArbiterVerdict(
         verdict=verdict,
         risk_level=risk,
         materiality_test=CriteriaAssessment(
             test_name="1. Materiality Test",
+            code=mat_code,
             passed_or_failed=mat_result,
             score=mat_score,
             rationale=mat_rationale,
         ),
         public_availability_test=CriteriaAssessment(
             test_name="2. Public Availability Test (Mosaic Check)",
+            code=pub_code,
             passed_or_failed=pub_result,
             score=pub_score,
             rationale=pub_rationale,
         ),
         source_and_duty_test=CriteriaAssessment(
             test_name="3. Source & Duty Test",
+            code=src_code,
             passed_or_failed=src_result,
             score=src_score,
             rationale=src_rationale,
         ),
         actionability_harm_test=CriteriaAssessment(
             test_name="4. Actionability / Harm Test",
+            code=harm_code,
             passed_or_failed=harm_result,
             score=harm_score,
             rationale=harm_rationale,
         ),
+        verification_codes=verification_codes,
+        causal_attribution=causal,
         recommended_action=action,
         redacted_text=redacted,
         summary_justification=justification,
     )
+
+    # Compute RL Multi-Objective Reward Metrics
+    rl_metrics = ComplianceRewardEngine.calculate_reward(
+        verdict=draft_verdict,
+        dossier=dossier,
+        causal_attribution=causal,
+    )
+    draft_verdict.rl_metrics = rl_metrics
+
+    return draft_verdict
 
 
 # ==============================================================================
@@ -498,16 +560,25 @@ def run_live_arbiter(client: Any, text: str, dossier: FactCheckingDossier) -> Ar
     prompt = f"""You are the definitive MPNI Compliance Arbiter Agent (Decision Authority).
 Your role is to evaluate the provided Factual Dossier against the 4 Mandatory Assessment Criteria:
 
-1. Materiality Test: Would a reasonable investor consider this information significant in making an investment decision, or would it substantially alter the 'total mix' of information available (Basic Inc. v. Levinson)? Rate score (0.0 to 1.0).
-2. Public Availability Test (Mosaic Check): Has this information been disseminated through recognized public distribution channels (SEC Form 8-K, national press release), or is it non-public? Rate score (0.0 to 1.0, where 1.0 is completely non-public).
-3. Source & Duty Test: Did the information originate from a corporate insider under a duty of trust or confidentiality, or are explicit secrecy markers present? Rate score (0.0 to 1.0).
-4. Actionability / Harm Test: Does unauthorized exposure create front-running risk, insider trading exposure, or strategic commercial harm? Rate score (0.0 to 1.0).
+1. Materiality Test (Basic Inc. v. Levinson): Rate score (0.0 to 1.0).
+   Assign standardized code: MAT_01_MARKET_MOVING_MA, MAT_02_EARNINGS_VARIANCE, MAT_03_ROADMAP_DISRUPTION, MAT_04_REGULATORY_RESTRICTION, or MAT_CLEARED_DE_MINIMIS.
+2. Public Availability Test (Mosaic Check): Rate score (0.0 to 1.0, where 1.0 is non-public).
+   Assign standardized code: MOSAIC_01_VERIFIED_PUBLIC_WIRE, MOSAIC_02_CONFIRMED_NON_PUBLIC, or MOSAIC_03_AMBIGUOUS_RUMOR.
+3. Source & Duty Test (Chiarella / Dirks): Rate score (0.0 to 1.0).
+   Assign standardized code: DUTY_01_EXPLICIT_SECRECY_MARKER, DUTY_02_INTERNAL_CODENAME, DUTY_03_INSIDER_FIDUCIARY_BREACH, or DUTY_CLEARED_EXTERNAL_SOURCE.
+4. Actionability / Harm Test: Rate score (0.0 to 1.0).
+   Assign standardized code: HARM_01_FRONT_RUNNING_EXPOSURE, HARM_02_STRATEGIC_SPOILAGE, or HARM_CLEARED_BENIGN.
+
+CRITICAL RULE (CONSERVATIVE BIAS PREVENTION):
+Under our Reinforcement Learning compliance model, blocking or redacting verified public or benign communications incurs a severe False Positive Penalty (R_fp = -4.0).
+If claims are verified in public press or lack market-moving materiality, classify as CLEARED or PUBLIC_NON_MATERIAL and set Recommended Action to APPROVE_RELEASE.
 
 Requirements:
 - Render verdict: 'MNPI_CONFIRMED' (if material, non-public, and insider/secrecy breach), 'POTENTIAL_MNPI' (if material but ambiguous public status), 'PUBLIC_NON_MATERIAL', or 'CLEARED'.
 - Risk level: 'CRITICAL', 'HIGH', 'MEDIUM', or 'LOW'.
 - Recommended Action: 'BLOCK_COMMUNICATION', 'REDACT_AND_PROCEED', 'ESCALATE_TO_COMPLIANCE', or 'APPROVE_RELEASE'.
-- Redacted Text: If MNPI is confirmed or potential, return the original text with all confidential codenames, transaction values, and sensitive unannounced dates replaced with '[REDACTED MNPI CONTENT]'. If clean, return the original text.
+- Verification Codes: Populate verification_codes array with the 4 standardized codes chosen above.
+- Redacted Text: If MNPI is confirmed or potential, return original text with all confidential codenames, transaction values, and sensitive unannounced dates replaced with '[REDACTED MNPI CONTENT]'. If clean, return original text.
 - Summary Justification: Comprehensive legal compliance justification for audit manifest.
 
 Original Document:
@@ -528,7 +599,37 @@ Fact Checking Dossier:
         contents=prompt,
         config=config,
     )
-    return ArbiterVerdict.model_validate_json(resp.text)
+    verdict = ArbiterVerdict.model_validate_json(resp.text)
+
+    # Ensure standardized codes are consolidated
+    codes = list(verdict.verification_codes or [])
+    for test in (
+        verdict.materiality_test,
+        verdict.public_availability_test,
+        verdict.source_and_duty_test,
+        verdict.actionability_harm_test,
+    ):
+        if test.code and test.code not in codes:
+            codes.append(test.code)
+    verdict.verification_codes = codes
+
+    # Evaluate Causal Attribution via LOO / Joint Cluster Ablation if not present
+    if verdict.causal_attribution is None:
+        verdict.causal_attribution = JointAblationManager.evaluate_causal_attribution(
+            text=text,
+            dossier=dossier,
+            base_violation_score=verdict.materiality_test.score,
+        )
+
+    # Compute RL Multi-Objective Reward Metrics if not present
+    if verdict.rl_metrics is None:
+        verdict.rl_metrics = ComplianceRewardEngine.calculate_reward(
+            verdict=verdict,
+            dossier=dossier,
+            causal_attribution=verdict.causal_attribution,
+        )
+
+    return verdict
 
 
 def run_two_agent_pipeline(

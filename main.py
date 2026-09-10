@@ -96,9 +96,29 @@ def print_results(text: str, dossier: FactCheckingDossier, verdict: ArbiterVerdi
 
     for t in tests:
         score_bar = "█" * int(t.score * 10) + "░" * (10 - int(t.score * 10))
+        code_str = f" | Code: {t.code}" if t.code else ""
         print(f"\n[{t.test_name}]")
-        print(f"  Score: [{score_bar}] {t.score:.2f} | Result: {t.passed_or_failed}")
+        print(f"  Score: [{score_bar}] {t.score:.2f} | Result: {t.passed_or_failed}{code_str}")
         print(f"  Rationale: {t.rationale}")
+
+    if verdict.verification_codes:
+        print(f"\n• Standardized Machine Verification Codes: {verdict.verification_codes}")
+
+    if verdict.causal_attribution:
+        ca = verdict.causal_attribution
+        print(f"\n• Causal Attribution Engine (LOO v2.0):")
+        print(f"  - Mode: {ca.ablation_mode} | Overdetermined: {ca.is_overdetermined} | Dominant: {ca.is_causally_dominant}")
+        print(f"  - Data Influence (S): {ca.data_influence_score:.2f} | Counterfactual Prompt (U): {ca.counterfactual_score:.2f}")
+        if ca.candidate_tokens:
+            print(f"  - Evaluated Tokens: {ca.candidate_tokens}")
+        print(f"  - Rationale: {ca.causal_rationale}")
+
+    if verdict.rl_metrics:
+        rm = verdict.rl_metrics
+        print(f"\n• Reinforcement Learning Multi-Objective Reward:")
+        print(f"  - Total Shaped Reward (R_total): {rm.total_reward:+.2f}")
+        print(f"  - Breakdown: Task={rm.task_reward:+.1f} | FalsePositive={rm.fp_penalty:+.1f} | Veto={rm.veto_penalty:+.1f} | CausalPen={rm.causal_penalty:+.2f}")
+        print(f"  - Rationale: {rm.reward_rationale}")
 
     print("\n" + "=" * 80)
     print("FINAL COMPLIANCE DETERMINATION:")

@@ -66,6 +66,22 @@ AGENT ASSESSMENT CRITERIA (THE 4 TESTS):
    - Outcome: Score between 0.0 (benign, non-actionable) and 1.0 (immediate actionable alpha or corporate damage).
 
 ================================================================================
+STANDARDIZED MACHINE-ENFORCEABLE VERIFICATION CODES:
+================================================================================
+For each test, select exactly one machine verification code:
+- Materiality Test: MAT_01_MARKET_MOVING_MA, MAT_02_EARNINGS_VARIANCE, MAT_03_ROADMAP_DISRUPTION, MAT_04_REGULATORY_RESTRICTION, MAT_CLEARED_DE_MINIMIS.
+- Public Availability Test: MOSAIC_01_VERIFIED_PUBLIC_WIRE, MOSAIC_02_CONFIRMED_NON_PUBLIC, MOSAIC_03_AMBIGUOUS_RUMOR.
+- Source & Duty Test: DUTY_01_EXPLICIT_SECRECY_MARKER, DUTY_02_INTERNAL_CODENAME, DUTY_03_INSIDER_FIDUCIARY_BREACH, DUTY_CLEARED_EXTERNAL_SOURCE.
+- Actionability / Harm Test: HARM_01_FRONT_RUNNING_EXPOSURE, HARM_02_STRATEGIC_SPOILAGE, HARM_CLEARED_BENIGN.
+
+================================================================================
+CONSERVATIVE BIAS PREVENTION (FALSE POSITIVE PENALTY):
+================================================================================
+CRITICAL: Do NOT block or redact verified public or benign text.
+Under our reinforcement learning compliance model, hyper-conservative over-blocking of public or non-material communications incurs a severe False Positive Penalty (R_fp = -4.0).
+If information is corroborated in public wire reports or lacks market-moving impact, classify as CLEARED or PUBLIC_NON_MATERIAL with APPROVE_RELEASE.
+
+================================================================================
 VERDICT DETERMINATION MATRIX:
 ================================================================================
 - MNPI_CONFIRMED: Materiality Test >= 0.7 AND Public Availability = Non-Public AND (Source/Duty >= 0.6 OR Actionability >= 0.6).
@@ -81,7 +97,7 @@ VERDICT DETERMINATION MATRIX:
   -> Risk Level: LOW. Recommended Action: APPROVE_RELEASE.
 
 OUTPUT REQUIREMENTS:
-Render a complete ArbiterVerdict adhering to the defined schema. Detail your analysis for each of the 4 tests thoroughly.
+Render a complete ArbiterVerdict adhering to the defined schema. Populate the `code` field for all 4 tests and include them in `verification_codes`. Detail your legal analysis thoroughly.
 """
 
 

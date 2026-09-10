@@ -8,9 +8,8 @@ Defines Pydantic models for:
 - Decision Authority: Arbiter 4-Test Assessment and Final Verdict
 """
 
-from __future__ import annotations
-
-from typing import List, Literal, Optional
+from enum import Enum
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -124,12 +123,80 @@ class FactCheckingDossier(BaseModel):
 
 
 # ==============================================================================
+# Standardized Machine-Enforceable Verification & Justification Codes
+# ==============================================================================
+
+class MaterialityCode(str, Enum):
+    MAT_01_MARKET_MOVING_MA = "MAT_01_MARKET_MOVING_MA"
+    MAT_02_EARNINGS_VARIANCE = "MAT_02_EARNINGS_VARIANCE"
+    MAT_03_ROADMAP_DISRUPTION = "MAT_03_ROADMAP_DISRUPTION"
+    MAT_04_REGULATORY_RESTRICTION = "MAT_04_REGULATORY_RESTRICTION"
+    MAT_CLEARED_DE_MINIMIS = "MAT_CLEARED_DE_MINIMIS"
+
+
+class MosaicCode(str, Enum):
+    MOSAIC_01_VERIFIED_PUBLIC_WIRE = "MOSAIC_01_VERIFIED_PUBLIC_WIRE"
+    MOSAIC_02_CONFIRMED_NON_PUBLIC = "MOSAIC_02_CONFIRMED_NON_PUBLIC"
+    MOSAIC_03_AMBIGUOUS_RUMOR = "MOSAIC_03_AMBIGUOUS_RUMOR"
+
+
+class DutyCode(str, Enum):
+    DUTY_01_EXPLICIT_SECRECY_MARKER = "DUTY_01_EXPLICIT_SECRECY_MARKER"
+    DUTY_02_INTERNAL_CODENAME = "DUTY_02_INTERNAL_CODENAME"
+    DUTY_03_INSIDER_FIDUCIARY_BREACH = "DUTY_03_INSIDER_FIDUCIARY_BREACH"
+    DUTY_CLEARED_EXTERNAL_SOURCE = "DUTY_CLEARED_EXTERNAL_SOURCE"
+
+
+class HarmCode(str, Enum):
+    HARM_01_FRONT_RUNNING_EXPOSURE = "HARM_01_FRONT_RUNNING_EXPOSURE"
+    HARM_02_STRATEGIC_SPOILAGE = "HARM_02_STRATEGIC_SPOILAGE"
+    HARM_CLEARED_BENIGN = "HARM_CLEARED_BENIGN"
+
+
+# ==============================================================================
+# Causal Attribution & Reinforcement Learning Metrics
+# ==============================================================================
+
+class CausalAttributionScore(BaseModel):
+    """Causal Attribution metrics computed via Leave-One-Out (LOO) ablation."""
+    ablation_mode: Literal[
+        "skipped_high_confidence",
+        "skipped_low_confidence",
+        "single_token_loo",
+        "joint_cluster",
+        "not_applicable"
+    ] = Field(description="Execution mode of the hierarchical ablation trigger")
+    candidate_tokens: List[str] = Field(default_factory=list, description="Tokens evaluated for causal attribution")
+    full_violation_score: float = Field(description="Violation score P(Violation | Prompt + Sensitive Data)")
+    counterfactual_score: float = Field(description="Counterfactual score P(Violation | Prompt + ∅)")
+    data_influence_score: float = Field(description="Data influence S = P(Full) - P(Counterfactual)")
+    prompt_influence_score: float = Field(description="Prompt influence U = P(Counterfactual)")
+    individual_deltas: Dict[str, float] = Field(default_factory=dict, description="Marginal delta per candidate token")
+    joint_influence_score: float = Field(default=0.0, description="Joint ablation score S_joint for token cluster C")
+    is_overdetermined: bool = Field(default=False, description="True if multiple concurrent leaks mask individual deltas")
+    is_causally_dominant: bool = Field(default=False, description="True if S > U - tau indicating sensitive data is causal driver")
+    causal_rationale: str = Field(description="Explanation of counterfactual causal attribution findings")
+
+
+class RLRewardMetrics(BaseModel):
+    """Reinforcement Learning multi-objective reward shaping metrics."""
+    task_reward: float = Field(ge=0.0, le=1.0, description="Task utility and execution score R_task")
+    veto_penalty: float = Field(description="Penalty lambda_veto * I(Veto Triggered) for unredacted MNPI leaks")
+    fp_penalty: float = Field(description="False positive penalty R_fp for over-blocking verified public/benign text")
+    causal_penalty: float = Field(description="Penalty proportional to causal data influence -gamma * S_influence")
+    code_penalties: Dict[str, float] = Field(default_factory=dict, description="Penalties derived from standardized verification codes")
+    total_reward: float = Field(description="Final shaped scalar reward R_total = R_task + Veto + Penalties - R_fp")
+    reward_rationale: str = Field(description="Breakdown explaining positive and negative reward components")
+
+
+# ==============================================================================
 # Arbiter: 4 Assessment Criteria & Final Verdict
 # ==============================================================================
 
 class CriteriaAssessment(BaseModel):
     """Evaluation result for one of the 4 Arbiter Assessment Criteria."""
     test_name: str = Field(description="Name of the assessment test")
+    code: Optional[str] = Field(default=None, description="Standardized machine-enforceable verification code")
     passed_or_failed: str = Field(
         description="Result description (e.g. 'VIOLATION / MATERIAL', 'NON-PUBLIC', 'CLEARED / PUBLIC')"
     )
@@ -160,6 +227,19 @@ class ArbiterVerdict(BaseModel):
         description="Criterion 4: Actionability / Harm Test (Does exposing this allow inferring confidential strategy/financial outcome?)"
     )
 
+    verification_codes: List[str] = Field(
+        default_factory=list,
+        description="Machine-enforceable verification codes from the 4 criteria"
+    )
+    causal_attribution: Optional[CausalAttributionScore] = Field(
+        default=None,
+        description="Causal attribution and LOO counterfactual metrics"
+    )
+    rl_metrics: Optional[RLRewardMetrics] = Field(
+        default=None,
+        description="Reinforcement learning reward metrics"
+    )
+
     recommended_action: Literal[
         "BLOCK_COMMUNICATION",
         "REDACT_AND_PROCEED",
@@ -174,3 +254,4 @@ class ArbiterVerdict(BaseModel):
     summary_justification: str = Field(
         description="Official executive compliance justification for audit logs"
     )
+

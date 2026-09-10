@@ -82,6 +82,21 @@
     barHarm: document.getElementById("bar-harm"),
     rationaleHarm: document.getElementById("rationale-harm"),
 
+    // RL & Causal Attribution v2 Display
+    verificationCodesList: document.getElementById("verification-codes-list"),
+    codesCountTag: document.getElementById("codes-count-tag"),
+    causalModeBadge: document.getElementById("causal-mode-badge"),
+    metricDataInfluence: document.getElementById("metric-data-influence"),
+    metricPromptInfluence: document.getElementById("metric-prompt-influence"),
+    metricOverdetermined: document.getElementById("metric-overdetermined"),
+    causalRationaleBox: document.getElementById("causal-rationale-box"),
+    rlTotalBadge: document.getElementById("rl-total-badge"),
+    chipTaskReward: document.getElementById("chip-task-reward"),
+    chipFpPenalty: document.getElementById("chip-fp-penalty"),
+    chipVetoPenalty: document.getElementById("chip-veto-penalty"),
+    chipCausalPenalty: document.getElementById("chip-causal-penalty"),
+    rlRationaleBox: document.getElementById("rl-rationale-box"),
+
     // Routing & Redaction Display
     routingBanner: document.getElementById("routing-banner"),
     routingIcon: document.getElementById("routing-icon"),
@@ -738,6 +753,72 @@
     renderCriterion(verdict.public_availability_test, dom.statusPub, dom.barPub, dom.rationalePub);
     renderCriterion(verdict.source_and_duty_test, dom.statusSrc, dom.barSrc, dom.rationaleSrc);
     renderCriterion(verdict.actionability_harm_test, dom.statusHarm, dom.barHarm, dom.rationaleHarm);
+
+    // 4b. Standardized Verification Codes
+    if (dom.verificationCodesList) {
+      clearElement(dom.verificationCodesList);
+      const codes = verdict.verification_codes || [];
+      if (codes.length > 0) {
+        codes.forEach(function (code) {
+          const pill = document.createElement("span");
+          const isCleared = code.includes("CLEARED") || code.includes("PUBLIC_WIRE") || code.includes("EXTERNAL");
+          pill.className = "code-pill " + (isCleared ? "cleared" : "violation");
+          pill.textContent = code;
+          dom.verificationCodesList.appendChild(pill);
+        });
+        if (dom.codesCountTag) dom.codesCountTag.textContent = codes.length + " codes verified";
+      } else {
+        const emptyPill = document.createElement("span");
+        emptyPill.className = "code-pill empty";
+        emptyPill.textContent = "No machine codes returned";
+        dom.verificationCodesList.appendChild(emptyPill);
+        if (dom.codesCountTag) dom.codesCountTag.textContent = "0 codes";
+      }
+    }
+
+    // 4c. Causal Attribution Engine (LOO)
+    if (verdict.causal_attribution && dom.causalModeBadge) {
+      const ca = verdict.causal_attribution;
+      dom.causalModeBadge.textContent = ca.ablation_mode;
+      if (ca.ablation_mode === "joint_cluster") {
+        dom.causalModeBadge.className = "badge-chip critical";
+      } else if (ca.ablation_mode.includes("skipped")) {
+        dom.causalModeBadge.className = "badge-chip ticker";
+      } else {
+        dom.causalModeBadge.className = "badge-chip warning";
+      }
+
+      if (dom.metricDataInfluence) dom.metricDataInfluence.textContent = (ca.data_influence_score || 0).toFixed(2);
+      if (dom.metricPromptInfluence) dom.metricPromptInfluence.textContent = (ca.counterfactual_score || 0).toFixed(2);
+      if (dom.metricOverdetermined) {
+        dom.metricOverdetermined.textContent = ca.is_overdetermined ? "YES (Multi-Leak)" : "NO";
+        dom.metricOverdetermined.style.color = ca.is_overdetermined ? "#f87171" : "#34d399";
+      }
+      if (dom.causalRationaleBox) dom.causalRationaleBox.textContent = ca.causal_rationale || "";
+    }
+
+    // 4d. RL Compliance Multi-Objective Reward
+    if (verdict.rl_metrics && dom.rlTotalBadge) {
+      const rm = verdict.rl_metrics;
+      const isPositive = rm.total_reward >= 0;
+      dom.rlTotalBadge.textContent = "R_total: " + (isPositive ? "+" : "") + rm.total_reward.toFixed(2);
+      dom.rlTotalBadge.className = "badge-chip " + (isPositive ? "total-reward-badge" : "critical");
+
+      if (dom.chipTaskReward) dom.chipTaskReward.textContent = "Task: +" + (rm.task_reward || 1.0).toFixed(1);
+      if (dom.chipFpPenalty) {
+        dom.chipFpPenalty.textContent = "R_fp (Bias): " + (rm.fp_penalty || 0.0).toFixed(1);
+        dom.chipFpPenalty.className = "rl-chip " + (rm.fp_penalty < 0 ? "penalty-active" : "");
+      }
+      if (dom.chipVetoPenalty) {
+        dom.chipVetoPenalty.textContent = "Veto: " + (rm.veto_penalty || 0.0).toFixed(1);
+        dom.chipVetoPenalty.className = "rl-chip " + (rm.veto_penalty < 0 ? "penalty-active" : "");
+      }
+      if (dom.chipCausalPenalty) {
+        dom.chipCausalPenalty.textContent = "Causal Pen: " + (rm.causal_penalty || 0.0).toFixed(2);
+        dom.chipCausalPenalty.className = "rl-chip " + (rm.causal_penalty < 0 ? "penalty-active" : "");
+      }
+      if (dom.rlRationaleBox) dom.rlRationaleBox.textContent = rm.reward_rationale || "";
+    }
 
     // 5. Routing Banner
     dom.routingBanner.className = "routing-banner " + routing.badge_variant;
