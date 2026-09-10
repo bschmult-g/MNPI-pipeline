@@ -42,7 +42,13 @@ from app.schemas import (
 from app.agents.fact_checker import create_fact_checker_agent
 from app.agents.arbiter import create_arbiter_agent
 from app.causal_engine import HierarchicalAblationTrigger, JointAblationManager
-from app.rl_engine import ComplianceRewardEngine
+from app.rl_engine import (
+    ComplianceRewardEngine,
+    RewardWeightsConfig,
+    get_active_weights,
+    reset_active_weights,
+    set_active_weights,
+)
 from app.tools.entity_tools import check_restricted_or_internal_codename, resolve_ticker_and_status
 from app.tools.search_tools import detect_secrecy_markers, search_public_press_and_filings
 
@@ -271,7 +277,10 @@ def run_offline_fact_checker(text: str) -> FactCheckingDossier:
     )
 
 
-def run_offline_arbiter(dossier: FactCheckingDossier) -> ArbiterVerdict:
+def run_offline_arbiter(
+    dossier: FactCheckingDossier,
+    weights: Optional[RewardWeightsConfig] = None,
+) -> ArbiterVerdict:
     """Executes the Arbiter 4-Test Assessment deterministically against a dossier."""
     text = dossier.original_text
 
@@ -451,6 +460,7 @@ def run_offline_arbiter(dossier: FactCheckingDossier) -> ArbiterVerdict:
         verdict=draft_verdict,
         dossier=dossier,
         causal_attribution=causal,
+        weights=weights,
     )
     draft_verdict.rl_metrics = rl_metrics
 
@@ -541,12 +551,16 @@ Document to analyze:
         config=config,
     )
     return FactCheckingDossier.model_validate_json(resp.text)
-
-
-def run_live_arbiter(client: Any, text: str, dossier: FactCheckingDossier) -> ArbiterVerdict:
-    """Executes the Arbiter Decision Authority Agent using live Gemini 3.8 Flash inference.
+def run_live_arbiter(
+    dossier: FactCheckingDossier,
+    text: str,
+    model: Optional[str] = None,
+    client: Optional[Any] = None,
+    weights: Optional[RewardWeightsConfig] = None,
+) -> ArbiterVerdict:
+    """Invokes the live Gemini model for the Decision Authority Arbiter agent.
     
-    Applies the 4 Assessment Criteria grounded in securities law:
+    Evaluates the FactCheckingDossier against the 4 mandatory assessment criteria:
     - Test 1: Materiality Test (Basic Inc. v. Levinson standard)
     - Test 2: Public Availability Test / Mosaic Check
     - Test 3: Source & Duty Test (Chiarella / Dirks breach of duty)
@@ -556,6 +570,10 @@ def run_live_arbiter(client: Any, text: str, dossier: FactCheckingDossier) -> Ar
     actionable recommendations, and redacts sensitive MNPI content if needed.
     """
     from google.genai.types import GenerateContentConfig
+
+    active_w = weights or get_active_weights()
+    fp_penalty_display = active_w.false_positive_penalty
+    genai_client = client or get_genai_client()
 
     prompt = f"""You are the definitive MPNI Compliance Arbiter Agent (Decision Authority).
 Your role is to evaluate the provided Factual Dossier against the 4 Mandatory Assessment Criteria:
@@ -570,7 +588,7 @@ Your role is to evaluate the provided Factual Dossier against the 4 Mandatory As
    Assign standardized code: HARM_01_FRONT_RUNNING_EXPOSURE, HARM_02_STRATEGIC_SPOILAGE, or HARM_CLEARED_BENIGN.
 
 CRITICAL RULE (CONSERVATIVE BIAS PREVENTION):
-Under our Reinforcement Learning compliance model, blocking or redacting verified public or benign communications incurs a severe False Positive Penalty (R_fp = -4.0).
+Under our Reinforcement Learning compliance model, blocking or redacting verified public or benign communications incurs a severe False Positive Penalty (R_fp = {fp_penalty_display:.1f}).
 If claims are verified in public press or lack market-moving materiality, classify as CLEARED or PUBLIC_NON_MATERIAL and set Recommended Action to APPROVE_RELEASE.
 
 Requirements:
@@ -594,8 +612,8 @@ Fact Checking Dossier:
         temperature=0.1,
     )
 
-    resp = client.models.generate_content(
-        model=settings.arbiter_model,
+    resp = genai_client.models.generate_content(
+        model=model or settings.arbiter_model,
         contents=prompt,
         config=config,
     )
@@ -623,6 +641,7 @@ Fact Checking Dossier:
         verdict=verdict,
         dossier=dossier,
         causal_attribution=verdict.causal_attribution,
+        weights=weights,
     )
 
     return verdict
@@ -637,6 +656,7 @@ def run_two_agent_pipeline(
     model: Optional[str] = None,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
+    weights: Optional[RewardWeightsConfig] = None,
     **kwargs: Any,
 ) -> tuple[FactCheckingDossier, ArbiterVerdict]:
     """Executes the two distinct agent runtimes sequentially with explicit payload handoff.
@@ -701,6 +721,7 @@ def run_pipeline(
     model: Optional[str] = None,
     project_id: Optional[str] = None,
     location: Optional[str] = None,
+    weights: Optional[RewardWeightsConfig] = None,
     **kwargs: Any,
 ) -> tuple[FactCheckingDossier, ArbiterVerdict]:
     """Compatibility wrapper delegating directly to the Two-Agent Pipeline."""
@@ -713,6 +734,7 @@ def run_pipeline(
         model=model,
         project_id=project_id,
         location=location,
+        weights=weights,
         **kwargs,
     )
 

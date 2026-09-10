@@ -33,6 +33,10 @@ from app.rl_engine import (
     CODE_WEIGHTS,
     ComplianceRewardEngine,
     DPOPreferenceDatasetBuilder,
+    RewardWeightsConfig,
+    get_active_weights,
+    reset_active_weights,
+    set_active_weights,
 )
 from app.schemas import (
     ArbiterVerdict,
@@ -172,6 +176,52 @@ class TestComplianceRewardEngine(unittest.TestCase):
         metrics = ComplianceRewardEngine.calculate_reward(verdict, dossier, verdict.causal_attribution)
         self.assertEqual(metrics.fp_penalty, -4.0)
         self.assertLess(metrics.total_reward, 0.0)
+
+    def test_dynamically_adjustable_weights_override(self):
+        """Validates that custom RewardWeightsConfig dynamically modifies penalties and rewards."""
+        custom_weights = RewardWeightsConfig(
+            r_task=2.5,
+            lambda_veto=-20.0,
+            false_positive_penalty=-8.0,
+            gamma_causal=3.5,
+        )
+
+        leak_text = "Don't share this yet, but we are finalizing Project Titan to acquire TechCo for $2.4B."
+        dossier = run_offline_fact_checker(leak_text)
+        verdict = run_offline_arbiter(dossier)
+        verdict.recommended_action = "APPROVE_RELEASE"
+        verdict.verdict = "CLEARED"
+
+        metrics = ComplianceRewardEngine.calculate_reward(
+            verdict,
+            dossier,
+            verdict.causal_attribution,
+            weights=custom_weights,
+        )
+        self.assertEqual(metrics.veto_penalty, -20.0)
+        self.assertEqual(metrics.task_reward, 2.5)
+
+    def test_global_active_weights_and_reset(self):
+        """Validates set_active_weights modifies pipeline behavior and reset_active_weights restores defaults."""
+        try:
+            set_active_weights({"lambda_veto": -18.0, "false_positive_penalty": -6.5})
+            active = get_active_weights()
+            self.assertEqual(active.lambda_veto, -18.0)
+            self.assertEqual(active.false_positive_penalty, -6.5)
+
+            leak_text = "Don't share this yet, but we are finalizing Project Titan to acquire TechCo for $2.4B."
+            dossier = run_offline_fact_checker(leak_text)
+            verdict = run_offline_arbiter(dossier)
+            verdict.recommended_action = "APPROVE_RELEASE"
+            verdict.verdict = "CLEARED"
+
+            metrics = ComplianceRewardEngine.calculate_reward(verdict, dossier, verdict.causal_attribution)
+            self.assertEqual(metrics.veto_penalty, -18.0)
+        finally:
+            reset_active_weights()
+            restored = get_active_weights()
+            self.assertEqual(restored.lambda_veto, -10.0)
+            self.assertEqual(restored.false_positive_penalty, -4.0)
 
 
 class TestDPOPreferenceDatasetBuilder(unittest.TestCase):

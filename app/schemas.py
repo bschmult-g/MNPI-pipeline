@@ -178,9 +178,62 @@ class CausalAttributionScore(BaseModel):
     causal_rationale: str = Field(description="Explanation of counterfactual causal attribution findings")
 
 
+class RewardWeightsConfig(BaseModel):
+    """Dynamically adjustable hyperparameters and penalty weights for RL compliance reward model."""
+    r_task: float = Field(default=1.0, description="Base task completion reward R_task")
+    lambda_veto: float = Field(default=-10.0, description="Catastrophic unredacted leak veto penalty lambda_veto")
+    false_positive_penalty: float = Field(default=-4.0, description="Conservative bias over-blocking penalty R_fp")
+    gamma_causal: float = Field(default=2.0, ge=0.0, description="Causal data influence sensitivity factor gamma")
+    dpo_min_margin: float = Field(default=2.5, ge=0.0, description="DPO pair acceptance minimum margin threshold")
+
+    # Standardized Code Weight fine-tuning
+    weight_mat_ma: float = Field(default=-3.0, description="Penalty for unredacted MAT_01 (Market Moving M&A)")
+    weight_mat_earnings: float = Field(default=-2.5, description="Penalty for unredacted MAT_02 (Earnings Variance)")
+    weight_mat_roadmap: float = Field(default=-2.0, description="Penalty for unredacted MAT_03 (Roadmap Disruption)")
+    weight_mat_regulatory: float = Field(default=-2.0, description="Penalty for unredacted MAT_04 (Regulatory Restriction)")
+    weight_mat_cleared: float = Field(default=1.0, description="Bonus for MAT_CLEARED")
+
+    weight_mosaic_public: float = Field(default=1.5, description="Bonus for MOSAIC_01 (Verified Public Wire)")
+    weight_mosaic_non_public: float = Field(default=-2.0, description="Penalty for MOSAIC_02 (Confirmed Non-Public)")
+    weight_mosaic_rumor: float = Field(default=-1.0, description="Penalty for MOSAIC_03 (Ambiguous Rumor)")
+
+    weight_duty_marker: float = Field(default=-2.5, description="Penalty for DUTY_01 (Explicit Secrecy Marker)")
+    weight_duty_codename: float = Field(default=-2.0, description="Penalty for DUTY_02 (Internal Codename)")
+    weight_duty_fiduciary: float = Field(default=-3.0, description="Penalty for DUTY_03 (Insider Fiduciary Breach)")
+    weight_duty_cleared: float = Field(default=1.0, description="Bonus for DUTY_CLEARED")
+
+    weight_harm_frontrunning: float = Field(default=-3.0, description="Penalty for HARM_01 (Front-Running Exposure)")
+    weight_harm_spoilage: float = Field(default=-2.0, description="Penalty for HARM_02 (Strategic Spoilage)")
+    weight_harm_cleared: float = Field(default=1.0, description="Bonus for HARM_CLEARED")
+
+    def get_code_weight(self, code: str, default: float = 0.0) -> float:
+        """Resolves the weight for a given standardized assessment code."""
+        mapping = {
+            MaterialityCode.MAT_01_MARKET_MOVING_MA.value: self.weight_mat_ma,
+            MaterialityCode.MAT_02_EARNINGS_VARIANCE.value: self.weight_mat_earnings,
+            MaterialityCode.MAT_03_ROADMAP_DISRUPTION.value: self.weight_mat_roadmap,
+            MaterialityCode.MAT_04_REGULATORY_RESTRICTION.value: self.weight_mat_regulatory,
+            MaterialityCode.MAT_CLEARED_DE_MINIMIS.value: self.weight_mat_cleared,
+
+            MosaicCode.MOSAIC_01_VERIFIED_PUBLIC_WIRE.value: self.weight_mosaic_public,
+            MosaicCode.MOSAIC_02_CONFIRMED_NON_PUBLIC.value: self.weight_mosaic_non_public,
+            MosaicCode.MOSAIC_03_AMBIGUOUS_RUMOR.value: self.weight_mosaic_rumor,
+
+            DutyCode.DUTY_01_EXPLICIT_SECRECY_MARKER.value: self.weight_duty_marker,
+            DutyCode.DUTY_02_INTERNAL_CODENAME.value: self.weight_duty_codename,
+            DutyCode.DUTY_03_INSIDER_FIDUCIARY_BREACH.value: self.weight_duty_fiduciary,
+            DutyCode.DUTY_CLEARED_EXTERNAL_SOURCE.value: self.weight_duty_cleared,
+
+            HarmCode.HARM_01_FRONT_RUNNING_EXPOSURE.value: self.weight_harm_frontrunning,
+            HarmCode.HARM_02_STRATEGIC_SPOILAGE.value: self.weight_harm_spoilage,
+            HarmCode.HARM_CLEARED_BENIGN.value: self.weight_harm_cleared,
+        }
+        return mapping.get(code, default)
+
+
 class RLRewardMetrics(BaseModel):
     """Reinforcement Learning multi-objective reward shaping metrics."""
-    task_reward: float = Field(ge=0.0, le=1.0, description="Task utility and execution score R_task")
+    task_reward: float = Field(description="Task utility and execution score R_task")
     veto_penalty: float = Field(description="Penalty lambda_veto * I(Veto Triggered) for unredacted MNPI leaks")
     fp_penalty: float = Field(description="False positive penalty R_fp for over-blocking verified public/benign text")
     causal_penalty: float = Field(description="Penalty proportional to causal data influence -gamma * S_influence")

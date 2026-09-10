@@ -54,6 +54,13 @@ try:
         get_table_full_id,
     )
     from app.config import settings
+    from app.rl_engine import (
+        ComplianceRewardEngine,
+        RewardWeightsConfig,
+        get_active_weights,
+        reset_active_weights,
+        set_active_weights,
+    )
 except ImportError:
     from workflow import run_pipeline
     from schemas import ArbiterVerdict, FactCheckingDossier
@@ -64,6 +71,13 @@ except ImportError:
         get_table_full_id,
     )
     from config import settings
+    from rl_engine import (
+        ComplianceRewardEngine,
+        RewardWeightsConfig,
+        get_active_weights,
+        reset_active_weights,
+        set_active_weights,
+    )
 
 logger = logging.getLogger("mnpi_demo")
 logging.basicConfig(level=logging.INFO)
@@ -802,6 +816,70 @@ def get_audit_schema():
         "table": os.getenv("BIGQUERY_TABLE", "document_alignment_log"),
         "fields": fields,
         "count": len(fields),
+    }
+
+
+# ==============================================================================
+# RL Compliance Reward Weights & Hyperparameter Endpoints
+# ==============================================================================
+
+class RLWeightsUpdateRequest(BaseModel):
+    """Payload to update active reward model weights and hyperparameters."""
+    r_task: Optional[float] = None
+    lambda_veto: Optional[float] = None
+    false_positive_penalty: Optional[float] = None
+    gamma_causal: Optional[float] = None
+    dpo_min_margin: Optional[float] = None
+    weight_mat_ma: Optional[float] = None
+    weight_mat_earnings: Optional[float] = None
+    weight_mat_roadmap: Optional[float] = None
+    weight_mat_regulatory: Optional[float] = None
+    weight_mat_cleared: Optional[float] = None
+    weight_mosaic_public: Optional[float] = None
+    weight_mosaic_non_public: Optional[float] = None
+    weight_mosaic_rumor: Optional[float] = None
+    weight_duty_marker: Optional[float] = None
+    weight_duty_codename: Optional[float] = None
+    weight_duty_fiduciary: Optional[float] = None
+    weight_duty_cleared: Optional[float] = None
+    weight_harm_frontrunning: Optional[float] = None
+    weight_harm_spoilage: Optional[float] = None
+    weight_harm_cleared: Optional[float] = None
+
+
+@app.get("/api/rl/config")
+async def get_rl_config():
+    """Returns currently active RL compliance reward weights and baseline defaults."""
+    active = get_active_weights().model_dump()
+    defaults = RewardWeightsConfig().model_dump()
+    return {
+        "active": active,
+        "defaults": defaults,
+    }
+
+
+@app.post("/api/rl/config")
+async def update_rl_config(payload: RLWeightsUpdateRequest):
+    """Updates active RL compliance reward weights across the live pipeline."""
+    updates = {k: v for k, v in payload.model_dump().items() if v is not None}
+    updated_weights = set_active_weights(updates)
+    logger.info(f"Updated live RL reward weights: {updates}")
+    return {
+        "status": "success",
+        "message": "Live Arbiter reward model weights successfully updated",
+        "active": updated_weights.model_dump(),
+    }
+
+
+@app.post("/api/rl/reset")
+async def reset_rl_config():
+    """Resets RL compliance reward weights to baseline defaults."""
+    reset_weights = reset_active_weights()
+    logger.info("Reset live RL reward weights to baseline defaults")
+    return {
+        "status": "success",
+        "message": "RL reward weights reset to defaults",
+        "active": reset_weights.model_dump(),
     }
 
 

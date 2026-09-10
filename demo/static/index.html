@@ -620,34 +620,34 @@ LIMIT 50;</pre>
           <h2>The Compliance Reward Formula</h2>
           <span class="formula-badge">Mathematical Objective Function</span>
         </div>
-        <div class="formula-box">
-          <code>R<sub>total</sub> = R<sub>task</sub> + &lambda;<sub>veto</sub> &middot; &Iopf;(Veto) + &sum; w<sub>k</sub> &middot; CodePenalty(C<sub>k</sub>) - &gamma; &middot; S<sub>influence</sub> - R<sub>fp</sub></code>
+        <div class="formula-box" id="dynamic-formula-display">
+          <code>R<sub>total</sub> = <span id="formula-term-rtask">+1.00</span> + <span id="formula-term-veto">(-10.00)</span> &middot; &Iopf;(Veto) + &sum; w<sub>k</sub> &middot; CodePenalty(C<sub>k</sub>) - <span id="formula-term-gamma">2.00</span> &middot; S<sub>influence</sub> - <span id="formula-term-rfp">(-4.00)</span></code>
         </div>
         <div class="formula-terms-grid">
           <div class="term-card">
             <div class="term-header">
-              <span class="term-name">R<sub>task</sub> = +1.0</span>
+              <span class="term-name" id="display-card-rtask">R<sub>task</sub> = +1.0</span>
               <span class="term-type reward">Task Baseline</span>
             </div>
             <p>Execution reward awarded for producing structured judicial rationale, applying the 4 legal criteria, and generating actionable routing directives.</p>
           </div>
           <div class="term-card">
             <div class="term-header">
-              <span class="term-name">&lambda;<sub>veto</sub> = -10.0</span>
+              <span class="term-name" id="display-card-veto">&lambda;<sub>veto</sub> = -10.0</span>
               <span class="term-type penalty">Catastrophic Veto</span>
             </div>
             <p>Triggered whenever actual Material Non-Public Information is present in the source communication and the agent attempts to approve direct release.</p>
           </div>
           <div class="term-card">
             <div class="term-header">
-              <span class="term-name">R<sub>fp</sub> = -4.0</span>
+              <span class="term-name" id="display-card-rfp">R<sub>fp</sub> = -4.0</span>
               <span class="term-type penalty">Anti-Conservative Bias</span>
             </div>
             <p><strong>Fixes "Paranoid Agent" syndrome:</strong> Heavily penalizes the model if it blocks or redacts verified public news wires, SEC filings, or routine immaterial chatter.</p>
           </div>
           <div class="term-card">
             <div class="term-header">
-              <span class="term-name">-&gamma; &middot; S<sub>influence</sub> (&gamma; = 2.0)</span>
+              <span class="term-name" id="display-card-gamma">-&gamma; &middot; S<sub>influence</sub> (&gamma; = 2.0)</span>
               <span class="term-type adjustment">Causal Penalty</span>
             </div>
             <p>Penalizes decisions where confidential insider intelligence drove the communication. Drops to zero when sensitive tokens are properly redacted or blocked.</p>
@@ -659,7 +659,7 @@ LIMIT 50;</pre>
             </div>
             <p>Standardized machine codes ensure granular, auditable evaluation across all 4 legal criteria:</p>
             <div class="codes-demo-row">
-              <span class="code-pill violation">MAT_01_MARKET_MOVING_MA (-3.0)</span>
+              <span class="code-pill violation" id="pill-code-mat01">MAT_01_MARKET_MOVING_MA (<span id="pill-val-mat01">-3.0</span>)</span>
               <span class="code-pill violation">MOSAIC_02_CONFIRMED_NON_PUBLIC (-2.0)</span>
               <span class="code-pill violation">DUTY_01_EXPLICIT_SECRECY_MARKER (-2.5)</span>
               <span class="code-pill violation">HARM_01_FRONT_RUNNING_EXPOSURE (-3.0)</span>
@@ -667,6 +667,136 @@ LIMIT 50;</pre>
               <span class="code-pill cleared">MOSAIC_01_VERIFIED_PUBLIC_WIRE (+1.5)</span>
               <span class="code-pill cleared">DUTY_CLEARED_EXTERNAL_SOURCE (+1.0)</span>
               <span class="code-pill cleared">HARM_CLEARED_BENIGN (+1.0)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- DYNAMIC FORMULA WEIGHT TUNER -->
+        <div class="rl-tuner-card">
+          <div class="card-section-header" style="margin-bottom: 0.5rem;">
+            <div>
+              <h3 style="font-size: 1.15rem; color: #f8fafc; margin-bottom: 0.25rem;">Interactive Formula Weight Simulator &amp; Live Tuner</h3>
+              <p style="font-size: 0.8rem; color: #94a3b8;">Adjust mathematical parameters, observe real-time reward simulations below, and apply weights to the live Arbiter.</p>
+            </div>
+            <div class="tuner-presets-bar">
+              <span class="preset-label">Presets:</span>
+              <button id="preset-balanced" class="btn-preset active" title="Default balanced risk weights">⚖️ Balanced (Default)</button>
+              <button id="preset-strict" class="btn-preset" title="Maximum leak penalty, low tolerance for leaks">🛡️ Strict Zero-Leak</button>
+              <button id="preset-permissive" class="btn-preset" title="Permissive, high penalty on false positives">⚡ Anti-Conservative Bias</button>
+            </div>
+          </div>
+
+          <!-- Sliders Grid -->
+          <div class="rl-sliders-grid">
+            <!-- Slider 1: R_task -->
+            <div class="slider-control-card">
+              <div class="slider-top-row">
+                <label for="slider-r-task">
+                  <strong>R<sub>task</sub></strong>: Base Task Execution Reward
+                </label>
+                <div class="slider-val-badge" id="val-badge-r-task">+1.0</div>
+              </div>
+              <input type="range" id="slider-r-task" min="0" max="5" step="0.1" value="1.0" class="rl-range-slider">
+              <div class="slider-meta">
+                <span>0.0</span>
+                <span class="slider-desc">Execution reward for completing judicial protocol.</span>
+                <span>+5.0</span>
+              </div>
+            </div>
+
+            <!-- Slider 2: lambda_veto -->
+            <div class="slider-control-card danger">
+              <div class="slider-top-row">
+                <label for="slider-lambda-veto">
+                  <strong>&lambda;<sub>veto</sub></strong>: Unredacted Leak Veto Penalty
+                </label>
+                <div class="slider-val-badge negative" id="val-badge-lambda-veto">-10.0</div>
+              </div>
+              <input type="range" id="slider-lambda-veto" min="-25" max="0" step="0.5" value="-10.0" class="rl-range-slider">
+              <div class="slider-meta">
+                <span>-25.0</span>
+                <span class="slider-desc">Catastrophic penalty for leaking unredacted MNPI.</span>
+                <span>0.0</span>
+              </div>
+            </div>
+
+            <!-- Slider 3: R_fp -->
+            <div class="slider-control-card warning">
+              <div class="slider-top-row">
+                <label for="slider-fp-penalty">
+                  <strong>R<sub>fp</sub></strong>: False Positive Penalty (Paranoia)
+                </label>
+                <div class="slider-val-badge negative" id="val-badge-fp-penalty">-4.0</div>
+              </div>
+              <input type="range" id="slider-fp-penalty" min="-15" max="0" step="0.5" value="-4.0" class="rl-range-slider">
+              <div class="slider-meta">
+                <span>-15.0</span>
+                <span class="slider-desc">Penalizes over-blocking verified public news.</span>
+                <span>0.0</span>
+              </div>
+            </div>
+
+            <!-- Slider 4: gamma_causal -->
+            <div class="slider-control-card info">
+              <div class="slider-top-row">
+                <label for="slider-gamma-causal">
+                  <strong>&gamma;</strong>: Causal Influence Factor
+                </label>
+                <div class="slider-val-badge" id="val-badge-gamma-causal">2.0</div>
+              </div>
+              <input type="range" id="slider-gamma-causal" min="0" max="8" step="0.2" value="2.0" class="rl-range-slider">
+              <div class="slider-meta">
+                <span>0.0</span>
+                <span class="slider-desc">Scales causal penalty: -&gamma; &middot; S<sub>influence</sub>.</span>
+                <span>8.0</span>
+              </div>
+            </div>
+
+            <!-- Slider 5: dpo_min_margin -->
+            <div class="slider-control-card purple">
+              <div class="slider-top-row">
+                <label for="slider-dpo-margin">
+                  <strong>&epsilon;<sub>margin</sub></strong>: DPO Acceptance Margin
+                </label>
+                <div class="slider-val-badge" id="val-badge-dpo-margin">&ge; 2.5</div>
+              </div>
+              <input type="range" id="slider-dpo-margin" min="0.5" max="10" step="0.5" value="2.5" class="rl-range-slider">
+              <div class="slider-meta">
+                <span>0.5</span>
+                <span class="slider-desc">Required &Delta;R = R(y<sub>win</sub>) - R(y<sub>lose</sub>) for DPO dataset.</span>
+                <span>10.0</span>
+              </div>
+            </div>
+
+            <!-- Slider 6: MAT_01 Code Weight -->
+            <div class="slider-control-card">
+              <div class="slider-top-row">
+                <label for="slider-weight-mat">
+                  <strong>w<sub>MAT_01</sub></strong>: Market-Moving M&amp;A Code Weight
+                </label>
+                <div class="slider-val-badge negative" id="val-badge-weight-mat">-3.0</div>
+              </div>
+              <input type="range" id="slider-weight-mat" min="-10" max="0" step="0.5" value="-3.0" class="rl-range-slider">
+              <div class="slider-meta">
+                <span>-10.0</span>
+                <span class="slider-desc">Weight penalty for unredacted M&amp;A deal disclosure.</span>
+                <span>0.0</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tuner Action Bar -->
+          <div class="tuner-action-bar">
+            <div class="tuner-status-msg" id="tuner-status-msg">
+              <span class="status-indicator live"></span> <span>Formula re-evaluated in real time.</span>
+            </div>
+            <div class="tuner-buttons">
+              <button id="btn-reset-weights" class="btn btn-secondary" style="padding: 8px 16px; font-size: 0.85rem;">
+                &#8634; Reset Defaults
+              </button>
+              <button id="btn-apply-weights" class="btn btn-primary" style="padding: 8px 18px; font-size: 0.85rem; font-weight: 600;">
+                &#128190; Apply Weights to Live Arbiter Pipeline
+              </button>
             </div>
           </div>
         </div>
@@ -716,17 +846,17 @@ LIMIT 50;</pre>
               <div class="outcome winning">
                 <div class="outcome-tag">Winning Decision (y<sub>win</sub>)</div>
                 <div class="outcome-verdict">MNPI_CONFIRMED &rarr; BLOCK_COMMUNICATION</div>
-                <div class="outcome-score">Reward: <strong class="pos">+5.00</strong></div>
+                <div class="outcome-score">Reward: <strong class="pos" id="scenario-a-rwin">+5.00</strong></div>
                 <p class="outcome-desc">Properly catches secrecy marker, verifies non-public status, assigns MAT_01, blocks and redacts leak.</p>
               </div>
               <div class="outcome losing">
                 <div class="outcome-tag">Losing Decision (y<sub>lose</sub>)</div>
                 <div class="outcome-verdict">CLEARED &rarr; APPROVE_RELEASE</div>
-                <div class="outcome-score">Reward: <strong class="neg">-14.80</strong></div>
-                <p class="outcome-desc">Catastrophic failure. Triggers &lambda;<sub>veto</sub> (-10.0), code penalties (-3.8), and causal influence penalty.</p>
+                <div class="outcome-score">Reward: <strong class="neg" id="scenario-a-rlose">-14.80</strong></div>
+                <p class="outcome-desc" id="scenario-a-lose-desc">Catastrophic failure. Triggers &lambda;<sub>veto</sub> (-10.0), code penalties (-3.8), and causal influence penalty.</p>
               </div>
             </div>
-            <div class="margin-banner">
+            <div class="margin-banner" id="scenario-a-margin-banner">
               Reward Margin: <strong>&Delta;R = +5.00 - (-14.80) = +19.80</strong> (&ge; 2.5 &rarr; Accepted into DPO Dataset)
             </div>
           </div>
@@ -741,17 +871,17 @@ LIMIT 50;</pre>
               <div class="outcome winning">
                 <div class="outcome-tag">Winning Decision (y<sub>win</sub>)</div>
                 <div class="outcome-verdict">CLEARED &rarr; APPROVE_RELEASE</div>
-                <div class="outcome-score">Reward: <strong class="pos">+5.50</strong></div>
+                <div class="outcome-score">Reward: <strong class="pos" id="scenario-b-rwin">+5.50</strong></div>
                 <p class="outcome-desc">Accurately identifies public Form 8-K distribution, assigns MOSAIC_01, approves communication without unnecessary delay.</p>
               </div>
               <div class="outcome losing">
                 <div class="outcome-tag">Losing Decision (y<sub>lose</sub>)</div>
                 <div class="outcome-verdict">MNPI_CONFIRMED &rarr; BLOCK_COMMUNICATION</div>
-                <div class="outcome-score">Reward: <strong class="neg">-8.00</strong></div>
-                <p class="outcome-desc">Hyper-conservative false alarm. Triggers R<sub>fp</sub> (-4.0) False Positive penalty for over-blocking public news.</p>
+                <div class="outcome-score">Reward: <strong class="neg" id="scenario-b-rlose">-8.00</strong></div>
+                <p class="outcome-desc" id="scenario-b-lose-desc">Hyper-conservative false alarm. Triggers R<sub>fp</sub> (-4.0) False Positive penalty for over-blocking public news.</p>
               </div>
             </div>
-            <div class="margin-banner">
+            <div class="margin-banner" id="scenario-b-margin-banner">
               Reward Margin: <strong>&Delta;R = +5.50 - (-8.00) = +13.50</strong> (&ge; 2.5 &rarr; Accepted into DPO Dataset)
             </div>
           </div>

@@ -136,6 +136,50 @@
     btnOpenRlGuide: document.getElementById("btn-open-rl-guide"),
     btnRlBackToPipeline: document.getElementById("btn-rl-back-to-pipeline"),
 
+    // RL Interactive Formula Tuner & Sliders
+    sliderRTask: document.getElementById("slider-r-task"),
+    sliderLambdaVeto: document.getElementById("slider-lambda-veto"),
+    sliderFpPenalty: document.getElementById("slider-fp-penalty"),
+    sliderGammaCausal: document.getElementById("slider-gamma-causal"),
+    sliderDpoMargin: document.getElementById("slider-dpo-margin"),
+    sliderWeightMat: document.getElementById("slider-weight-mat"),
+
+    valBadgeRTask: document.getElementById("val-badge-r-task"),
+    valBadgeLambdaVeto: document.getElementById("val-badge-lambda-veto"),
+    valBadgeFpPenalty: document.getElementById("val-badge-fp-penalty"),
+    valBadgeGammaCausal: document.getElementById("val-badge-gamma-causal"),
+    valBadgeDpoMargin: document.getElementById("val-badge-dpo-margin"),
+    valBadgeWeightMat: document.getElementById("val-badge-weight-mat"),
+
+    presetBalanced: document.getElementById("preset-balanced"),
+    presetStrict: document.getElementById("preset-strict"),
+    presetPermissive: document.getElementById("preset-permissive"),
+
+    btnApplyWeights: document.getElementById("btn-apply-weights"),
+    btnResetWeights: document.getElementById("btn-reset-weights"),
+    tunerStatusMsg: document.getElementById("tuner-status-msg"),
+
+    formulaTermRTask: document.getElementById("formula-term-rtask"),
+    formulaTermVeto: document.getElementById("formula-term-veto"),
+    formulaTermFp: document.getElementById("formula-term-rfp"),
+    formulaTermGamma: document.getElementById("formula-term-gamma"),
+
+    displayCardRTask: document.getElementById("display-card-rtask"),
+    displayCardVeto: document.getElementById("display-card-veto"),
+    displayCardFp: document.getElementById("display-card-rfp"),
+    displayCardGamma: document.getElementById("display-card-gamma"),
+    pillValMat01: document.getElementById("pill-val-mat01"),
+
+    scenarioARwin: document.getElementById("scenario-a-rwin"),
+    scenarioARlose: document.getElementById("scenario-a-rlose"),
+    scenarioALoseDesc: document.getElementById("scenario-a-lose-desc"),
+    scenarioAMarginBanner: document.getElementById("scenario-a-margin-banner"),
+
+    scenarioBRwin: document.getElementById("scenario-b-rwin"),
+    scenarioBRlose: document.getElementById("scenario-b-rlose"),
+    scenarioBLoseDesc: document.getElementById("scenario-b-lose-desc"),
+    scenarioBMarginBanner: document.getElementById("scenario-b-margin-banner"),
+
     // BigQuery Explorer Controls & Panes
     btnRefreshBqExplorer: document.getElementById("btn-refresh-bq-explorer"),
     btnExportCsv: document.getElementById("btn-export-csv"),
@@ -1517,9 +1561,222 @@
     });
   }
 
+  // ============================================================================
+  // RL Interactive Formula Tuner & Real-Time Simulator Controller
+  // ============================================================================
+
+  function updateFormulaSimulation() {
+    if (!dom.sliderRTask) return;
+
+    var rTask = parseFloat(dom.sliderRTask.value) || 1.0;
+    var lambdaVeto = parseFloat(dom.sliderLambdaVeto.value) || -10.0;
+    var fpPenalty = parseFloat(dom.sliderFpPenalty.value) || -4.0;
+    var gamma = parseFloat(dom.sliderGammaCausal.value) || 2.0;
+    var dpoMargin = parseFloat(dom.sliderDpoMargin.value) || 2.5;
+    var wMat = parseFloat(dom.sliderWeightMat.value) || -3.0;
+
+    // 1. Update Slider Badges
+    if (dom.valBadgeRTask) dom.valBadgeRTask.textContent = (rTask >= 0 ? "+" : "") + rTask.toFixed(1);
+    if (dom.valBadgeLambdaVeto) dom.valBadgeLambdaVeto.textContent = lambdaVeto.toFixed(1);
+    if (dom.valBadgeFpPenalty) dom.valBadgeFpPenalty.textContent = fpPenalty.toFixed(1);
+    if (dom.valBadgeGammaCausal) dom.valBadgeGammaCausal.textContent = gamma.toFixed(1);
+    if (dom.valBadgeDpoMargin) dom.valBadgeDpoMargin.textContent = "≥ " + dpoMargin.toFixed(1);
+    if (dom.valBadgeWeightMat) dom.valBadgeWeightMat.textContent = wMat.toFixed(1);
+
+    // 2. Update Formula Box Equation Display
+    if (dom.formulaTermRTask) dom.formulaTermRTask.textContent = (rTask >= 0 ? "+" : "") + rTask.toFixed(2);
+    if (dom.formulaTermVeto) dom.formulaTermVeto.textContent = "(" + lambdaVeto.toFixed(2) + ")";
+    if (dom.formulaTermFp) dom.formulaTermFp.textContent = "(" + fpPenalty.toFixed(2) + ")";
+    if (dom.formulaTermGamma) dom.formulaTermGamma.textContent = gamma.toFixed(2);
+
+    // 3. Update Term Card Headers
+    if (dom.displayCardRTask) dom.displayCardRTask.innerHTML = "R<sub>task</sub> = " + (rTask >= 0 ? "+" : "") + rTask.toFixed(1);
+    if (dom.displayCardVeto) dom.displayCardVeto.innerHTML = "&lambda;<sub>veto</sub> = " + lambdaVeto.toFixed(1);
+    if (dom.displayCardFp) dom.displayCardFp.innerHTML = "R<sub>fp</sub> = " + fpPenalty.toFixed(1);
+    if (dom.displayCardGamma) dom.displayCardGamma.innerHTML = "-&gamma; &middot; S<sub>influence</sub> (&gamma; = " + gamma.toFixed(1) + ")";
+    if (dom.pillValMat01) dom.pillValMat01.textContent = wMat.toFixed(1);
+
+    // 4. Recalculate Scenario A (M&A Leak)
+    // Winning decision: Neutralized leak -> Task Reward + Mitigated Violation Codes (+4.0)
+    var rWinA = rTask + 4.0;
+    // Losing decision: Unredacted leak allowed -> Task + Veto + wMat + Mosaic02(-2.0) - gamma * S(0.9)
+    var rLoseA = rTask + lambdaVeto + wMat - 2.0 - (gamma * 0.9);
+    var deltaA = rWinA - rLoseA;
+
+    if (dom.scenarioARwin) dom.scenarioARwin.textContent = (rWinA >= 0 ? "+" : "") + rWinA.toFixed(2);
+    if (dom.scenarioARlose) dom.scenarioARlose.textContent = rLoseA.toFixed(2);
+    if (dom.scenarioALoseDesc) {
+      dom.scenarioALoseDesc.innerHTML = "Catastrophic failure. Triggers &lambda;<sub>veto</sub> (" + lambdaVeto.toFixed(1) +
+        "), code penalties (" + (wMat - 2.0).toFixed(1) + "), and causal influence penalty (-" + (gamma * 0.9).toFixed(1) + ").";
+    }
+    if (dom.scenarioAMarginBanner) {
+      var isAcceptedA = deltaA >= dpoMargin;
+      dom.scenarioAMarginBanner.className = "margin-banner " + (isAcceptedA ? "accepted" : "rejected");
+      dom.scenarioAMarginBanner.innerHTML = "Reward Margin: <strong>&Delta;R = " +
+        (rWinA >= 0 ? "+" : "") + rWinA.toFixed(2) + " - (" + rLoseA.toFixed(2) + ") = " +
+        (deltaA >= 0 ? "+" : "") + deltaA.toFixed(2) + "</strong> (" +
+        (isAcceptedA ? "&ge; " + dpoMargin.toFixed(1) + " &rarr; Accepted into DPO Dataset" : "< " + dpoMargin.toFixed(1) + " &rarr; Rejected: Insufficient Margin") +
+        ")";
+    }
+
+    // 5. Recalculate Scenario B (Routine Public Press Release)
+    // Winning decision: Cleared -> Task Reward + Public Codes (+4.5)
+    var rWinB = rTask + 4.5;
+    // Losing decision: False positive over-blocking -> Task + R_fp - Misassigned codes (-3.0) - 2.0
+    var rLoseB = rTask + fpPenalty - 5.0;
+    var deltaB = rWinB - rLoseB;
+
+    if (dom.scenarioBRwin) dom.scenarioBRwin.textContent = (rWinB >= 0 ? "+" : "") + rWinB.toFixed(2);
+    if (dom.scenarioBRlose) dom.scenarioBRlose.textContent = rLoseB.toFixed(2);
+    if (dom.scenarioBLoseDesc) {
+      dom.scenarioBLoseDesc.innerHTML = "Hyper-conservative false alarm. Triggers R<sub>fp</sub> (" + fpPenalty.toFixed(1) +
+        ") False Positive penalty for over-blocking public news.";
+    }
+    if (dom.scenarioBMarginBanner) {
+      var isAcceptedB = deltaB >= dpoMargin;
+      dom.scenarioBMarginBanner.className = "margin-banner " + (isAcceptedB ? "accepted" : "rejected");
+      dom.scenarioBMarginBanner.innerHTML = "Reward Margin: <strong>&Delta;R = " +
+        (rWinB >= 0 ? "+" : "") + rWinB.toFixed(2) + " - (" + rLoseB.toFixed(2) + ") = " +
+        (deltaB >= 0 ? "+" : "") + deltaB.toFixed(2) + "</strong> (" +
+        (isAcceptedB ? "&ge; " + dpoMargin.toFixed(1) + " &rarr; Accepted into DPO Dataset" : "< " + dpoMargin.toFixed(1) + " &rarr; Rejected: Insufficient Margin") +
+        ")";
+    }
+  }
+
+  function setPreset(name) {
+    [dom.presetBalanced, dom.presetStrict, dom.presetPermissive].forEach(function (btn) {
+      if (btn) btn.classList.remove("active");
+    });
+
+    if (name === "balanced") {
+      if (dom.presetBalanced) dom.presetBalanced.classList.add("active");
+      if (dom.sliderRTask) dom.sliderRTask.value = "1.0";
+      if (dom.sliderLambdaVeto) dom.sliderLambdaVeto.value = "-10.0";
+      if (dom.sliderFpPenalty) dom.sliderFpPenalty.value = "-4.0";
+      if (dom.sliderGammaCausal) dom.sliderGammaCausal.value = "2.0";
+      if (dom.sliderDpoMargin) dom.sliderDpoMargin.value = "2.5";
+      if (dom.sliderWeightMat) dom.sliderWeightMat.value = "-3.0";
+    } else if (name === "strict") {
+      if (dom.presetStrict) dom.presetStrict.classList.add("active");
+      if (dom.sliderRTask) dom.sliderRTask.value = "1.0";
+      if (dom.sliderLambdaVeto) dom.sliderLambdaVeto.value = "-20.0";
+      if (dom.sliderFpPenalty) dom.sliderFpPenalty.value = "-1.5";
+      if (dom.sliderGammaCausal) dom.sliderGammaCausal.value = "4.0";
+      if (dom.sliderDpoMargin) dom.sliderDpoMargin.value = "3.0";
+      if (dom.sliderWeightMat) dom.sliderWeightMat.value = "-5.0";
+    } else if (name === "permissive") {
+      if (dom.presetPermissive) dom.presetPermissive.classList.add("active");
+      if (dom.sliderRTask) dom.sliderRTask.value = "1.5";
+      if (dom.sliderLambdaVeto) dom.sliderLambdaVeto.value = "-6.0";
+      if (dom.sliderFpPenalty) dom.sliderFpPenalty.value = "-8.0";
+      if (dom.sliderGammaCausal) dom.sliderGammaCausal.value = "1.0";
+      if (dom.sliderDpoMargin) dom.sliderDpoMargin.value = "2.0";
+      if (dom.sliderWeightMat) dom.sliderWeightMat.value = "-2.0";
+    }
+    updateFormulaSimulation();
+  }
+
+  // Bind slider events (input and change for real-time 60fps responsiveness)
+  [
+    dom.sliderRTask,
+    dom.sliderLambdaVeto,
+    dom.sliderFpPenalty,
+    dom.sliderGammaCausal,
+    dom.sliderDpoMargin,
+    dom.sliderWeightMat,
+  ].forEach(function (slider) {
+    if (slider) {
+      slider.addEventListener("input", function () {
+        [dom.presetBalanced, dom.presetStrict, dom.presetPermissive].forEach(function (btn) {
+          if (btn) btn.classList.remove("active");
+        });
+        updateFormulaSimulation();
+      });
+    }
+  });
+
+  if (dom.presetBalanced) dom.presetBalanced.addEventListener("click", function () { setPreset("balanced"); });
+  if (dom.presetStrict) dom.presetStrict.addEventListener("click", function () { setPreset("strict"); });
+  if (dom.presetPermissive) dom.presetPermissive.addEventListener("click", function () { setPreset("permissive"); });
+
+  // Apply weights to backend API
+  if (dom.btnApplyWeights) {
+    dom.btnApplyWeights.addEventListener("click", async function () {
+      var payload = {
+        r_task: parseFloat(dom.sliderRTask.value),
+        lambda_veto: parseFloat(dom.sliderLambdaVeto.value),
+        false_positive_penalty: parseFloat(dom.sliderFpPenalty.value),
+        gamma_causal: parseFloat(dom.sliderGammaCausal.value),
+        dpo_min_margin: parseFloat(dom.sliderDpoMargin.value),
+        weight_mat_ma: parseFloat(dom.sliderWeightMat.value),
+      };
+
+      if (dom.tunerStatusMsg) {
+        dom.tunerStatusMsg.innerHTML = '<span class="status-indicator live"></span> <span>Applying weights to live pipeline...</span>';
+      }
+
+      try {
+        var resp = await fetch("/api/rl/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        var data = await resp.json();
+        if (resp.ok && data.status === "success") {
+          if (dom.tunerStatusMsg) {
+            dom.tunerStatusMsg.innerHTML = '<span style="color: #34d399; font-weight: 600;">✓ Saved to Live Arbiter! Real-time document evaluations will use these weights.</span>';
+          }
+        } else {
+          throw new Error(data.detail || "Failed to update weights");
+        }
+      } catch (err) {
+        if (dom.tunerStatusMsg) {
+          dom.tunerStatusMsg.innerHTML = '<span style="color: #f87171;">✗ Error applying weights: ' + escapeHtml(err.message) + '</span>';
+        }
+      }
+    });
+  }
+
+  // Reset weights to default
+  if (dom.btnResetWeights) {
+    dom.btnResetWeights.addEventListener("click", async function () {
+      setPreset("balanced");
+      try {
+        await fetch("/api/rl/reset", { method: "POST" });
+        if (dom.tunerStatusMsg) {
+          dom.tunerStatusMsg.innerHTML = '<span style="color: #60a5fa; font-weight: 600;">↺ Reset to baseline theoretical weights.</span>';
+        }
+      } catch (e) {
+        console.warn("Reset error:", e);
+      }
+    });
+  }
+
+  // Load existing configuration from backend on startup
+  async function loadRLConfig() {
+    try {
+      var resp = await fetch("/api/rl/config");
+      if (!resp.ok) return;
+      var data = await resp.json();
+      if (data && data.active) {
+        var a = data.active;
+        if (dom.sliderRTask && a.r_task !== undefined) dom.sliderRTask.value = a.r_task;
+        if (dom.sliderLambdaVeto && a.lambda_veto !== undefined) dom.sliderLambdaVeto.value = a.lambda_veto;
+        if (dom.sliderFpPenalty && a.false_positive_penalty !== undefined) dom.sliderFpPenalty.value = a.false_positive_penalty;
+        if (dom.sliderGammaCausal && a.gamma_causal !== undefined) dom.sliderGammaCausal.value = a.gamma_causal;
+        if (dom.sliderDpoMargin && a.dpo_min_margin !== undefined) dom.sliderDpoMargin.value = a.dpo_min_margin;
+        if (dom.sliderWeightMat && a.weight_mat_ma !== undefined) dom.sliderWeightMat.value = a.weight_mat_ma;
+        updateFormulaSimulation();
+      }
+    } catch (e) {
+      console.warn("Could not fetch /api/rl/config", e);
+    }
+  }
+
   // Initialize
   loadPresetScenarios();
   loadBucketFileList();
   loadAuditLogs();
   loadAuditSchema();
+  loadRLConfig();
 })();

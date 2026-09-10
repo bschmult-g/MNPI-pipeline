@@ -28,10 +28,52 @@ from app.schemas import (
     HarmCode,
     MaterialityCode,
     MosaicCode,
+    RewardWeightsConfig,
     RLRewardMetrics,
 )
 
 logger = logging.getLogger("mnpi_rl_engine")
+
+# Module-level active configurable weights
+DEFAULT_REWARD_WEIGHTS = RewardWeightsConfig()
+_active_reward_weights = DEFAULT_REWARD_WEIGHTS.model_copy()
+
+
+def get_active_weights() -> RewardWeightsConfig:
+    """Returns a copy of the currently active reward weights configuration."""
+    return _active_reward_weights.model_copy()
+
+
+def set_active_weights(weights: Any) -> RewardWeightsConfig:
+    """Updates the active reward model configuration across the entire pipeline.
+    
+    Accepts either a RewardWeightsConfig instance or a dictionary of fields.
+    """
+    global _active_reward_weights
+    if isinstance(weights, dict):
+        current_data = _active_reward_weights.model_dump()
+        current_data.update(weights)
+        _active_reward_weights = RewardWeightsConfig(**current_data)
+    elif isinstance(weights, RewardWeightsConfig):
+        _active_reward_weights = weights.model_copy()
+    else:
+        raise ValueError(f"Unsupported weights configuration type: {type(weights)}")
+
+    # Synchronize class-level attributes for backward compatibility
+    ComplianceRewardEngine.LAMBDA_VETO = _active_reward_weights.lambda_veto
+    ComplianceRewardEngine.FALSE_POSITIVE_PENALTY = _active_reward_weights.false_positive_penalty
+    ComplianceRewardEngine.GAMMA_CAUSAL = _active_reward_weights.gamma_causal
+    return _active_reward_weights.model_copy()
+
+
+def reset_active_weights() -> RewardWeightsConfig:
+    """Resets active weights to baseline defaults."""
+    global _active_reward_weights
+    _active_reward_weights = DEFAULT_REWARD_WEIGHTS.model_copy()
+    ComplianceRewardEngine.LAMBDA_VETO = _active_reward_weights.lambda_veto
+    ComplianceRewardEngine.FALSE_POSITIVE_PENALTY = _active_reward_weights.false_positive_penalty
+    ComplianceRewardEngine.GAMMA_CAUSAL = _active_reward_weights.gamma_causal
+    return _active_reward_weights.model_copy()
 
 
 # Standardized Code Weight Penalties / Rewards
@@ -74,13 +116,22 @@ class ComplianceRewardEngine:
         verdict: ArbiterVerdict,
         dossier: Optional[FactCheckingDossier] = None,
         causal_attribution: Optional[CausalAttributionScore] = None,
+        weights: Optional[RewardWeightsConfig] = None,
     ) -> RLRewardMetrics:
-        """Calculates multi-objective RL reward R_total.
+        """Calculates multi-objective RL reward R_total with dynamic weights.
 
-        R_total = R_task + λ_veto * I(Veto) + sum(CodePenalties) - γ * S_influence + R_fp_penalty
+        R_total = R_task + λ_veto * I(Veto) + sum(CodePenalties) - γ * S_influence - R_fp_penalty
         """
+        active_w = weights or get_active_weights()
+
+        # Check if legacy class attributes were overridden directly on cls
+        lambda_veto = cls.LAMBDA_VETO if cls.LAMBDA_VETO != -10.0 and weights is None else active_w.lambda_veto
+        fp_penalty_val = cls.FALSE_POSITIVE_PENALTY if cls.FALSE_POSITIVE_PENALTY != -4.0 and weights is None else active_w.false_positive_penalty
+        gamma_causal = cls.GAMMA_CAUSAL if cls.GAMMA_CAUSAL != 2.0 and weights is None else active_w.gamma_causal
+        r_task = active_w.r_task
+
         # 1. Task reward R_task (Execution and format completeness)
-        task_reward = 1.0
+        task_reward = round(r_task, 4)
 
         # Determine underlying ground-truth risk from dossier or verdict assessments
         is_ground_truth_public = False
@@ -102,7 +153,7 @@ class ComplianceRewardEngine:
         # 2. Veto check: Unredacted leak allowed through
         is_blocked_or_redacted = verdict.recommended_action in ("BLOCK_COMMUNICATION", "REDACT_AND_PROCEED")
         unredacted_leak = is_ground_truth_leak and not is_blocked_or_redacted
-        veto_penalty = cls.LAMBDA_VETO if unredacted_leak else 0.0
+        veto_penalty = round(lambda_veto, 4) if unredacted_leak else 0.0
 
         # 3. False Positive check: Hyper-conservative over-blocking of public/benign content
         is_benign = (
@@ -110,7 +161,7 @@ class ComplianceRewardEngine:
             and verdict.actionability_harm_test.score <= 0.25
         )
         is_false_positive = (is_ground_truth_public or is_benign) and is_blocked_or_redacted
-        fp_penalty = cls.FALSE_POSITIVE_PENALTY if is_false_positive else 0.0
+        fp_penalty = round(fp_penalty_val, 4) if is_false_positive else 0.0
 
         # 4. Causal penalty: -γ * S_influence
         s_influence = causal_attribution.data_influence_score if causal_attribution else 0.0
@@ -118,9 +169,9 @@ class ComplianceRewardEngine:
             # Correctly blocked MNPI does not penalize the Arbiter for sensitive data influence
             causal_penalty = 0.0
         elif unredacted_leak:
-            causal_penalty = -round(cls.GAMMA_CAUSAL * max(s_influence, 0.50), 4)
+            causal_penalty = -round(gamma_causal * max(s_influence, 0.50), 4)
         else:
-            causal_penalty = -round(cls.GAMMA_CAUSAL * s_influence, 4)
+            causal_penalty = -round(gamma_causal * s_influence, 4)
 
         # 5. Standardized code penalties / bonuses
         code_penalties: Dict[str, float] = {}
@@ -135,7 +186,7 @@ class ComplianceRewardEngine:
                 codes.append(test.code)
 
         for c in codes:
-            base_w = CODE_WEIGHTS.get(c, 0.0)
+            base_w = active_w.get_code_weight(c, CODE_WEIGHTS.get(c, 0.0))
             if base_w < 0.0:
                 # Violation code (e.g. MAT_01, DUTY_01)
                 if is_blocked_or_redacted and not is_false_positive:
@@ -185,8 +236,14 @@ class DPOPreferenceDatasetBuilder:
 
     MIN_MARGIN_THRESHOLD: float = 2.5  # ε = 2.5 minimum margin requirement
 
-    def __init__(self, min_margin: float = MIN_MARGIN_THRESHOLD):
-        self.min_margin = min_margin
+    def __init__(
+        self,
+        min_margin: Optional[float] = None,
+        weights: Optional[RewardWeightsConfig] = None,
+    ):
+        self.weights = weights
+        active_w = weights or get_active_weights()
+        self.min_margin = min_margin if min_margin is not None else active_w.dpo_min_margin
         self.preference_pairs: List[Dict[str, Any]] = []
         self.rejected_pairs_count: int = 0
 
@@ -201,8 +258,8 @@ class DPOPreferenceDatasetBuilder:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> bool:
         """Evaluates and admits a preference pair (y_win, y_lose) if ΔR >= ε."""
-        r_win = ComplianceRewardEngine.calculate_reward(winning_verdict, dossier, causal_win)
-        r_lose = ComplianceRewardEngine.calculate_reward(losing_verdict, dossier, causal_lose)
+        r_win = ComplianceRewardEngine.calculate_reward(winning_verdict, dossier, causal_win, weights=self.weights)
+        r_lose = ComplianceRewardEngine.calculate_reward(losing_verdict, dossier, causal_lose, weights=self.weights)
 
         delta_r = round(r_win.total_reward - r_lose.total_reward, 4)
 
