@@ -642,10 +642,20 @@ async def upload_document(
 def process_document(req: ProcessRequest):
     """Processes document through the 2-Agent Fact Checker -> Arbiter pipeline."""
     start_time = time.perf_counter()
+    doc_name = req.document_title or (os.path.basename(req.source_uri) if req.source_uri else "Document")
+    print(f"\n=======================================================", flush=True)
+    print(f"📥 [START] Processing: '{doc_name}' ({len(req.text)} chars, channel={req.channel})", flush=True)
+    print(f"🕵️  [Step 1/2] Invoking Agent 1 (Fact Checker Coordinator)...", flush=True)
 
     # Run the compliance arbitration pipeline
-    dossier, verdict = run_pipeline(req.text)
+    dossier, verdict = run_pipeline(
+        text=req.text,
+        document_name=doc_name,
+        channel=req.channel,
+    )
     latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+    print(f"⚖️  [Step 2/2] Arbiter Verdict: {verdict.verdict} | Risk: {verdict.risk_level} | Latency: {latency_ms}ms", flush=True)
+    print(f"=======================================================\n", flush=True)
 
     # Calculate routing destination based on verdict
     if verdict.verdict == "MNPI_CONFIRMED":

@@ -628,7 +628,20 @@
     dom.processSpinner.classList.remove("hidden");
     const btnTextSpan = dom.btnProcess.querySelector(".btn-text");
     const originalBtnText = btnTextSpan ? btnTextSpan.textContent : "⚙ Process with Two-Agent Platform";
-    if (btnTextSpan) btnTextSpan.textContent = "Arbitrating with Gemini 3.8 Flash (Vertex AI)...";
+
+    const progressSteps = [
+      "🕵️ Step 1/3: Fact Checker extracting entities & codenames...",
+      "🔍 Step 1/3: Checking public wire releases & secrecy markers...",
+      "⚖️ Step 2/3: Arbiter scoring Materiality & Mosaic tests...",
+      "🛡️ Step 2/3: Evaluating Source/Duty & Actionability harm...",
+      "📊 Step 3/3: Streaming compliance integrity hash to BigQuery...",
+    ];
+    let stepIndex = 0;
+    if (btnTextSpan) btnTextSpan.textContent = progressSteps[0];
+    const progressInterval = setInterval(() => {
+      stepIndex = (stepIndex + 1) % progressSteps.length;
+      if (btnTextSpan) btnTextSpan.textContent = progressSteps[stepIndex];
+    }, 3200);
 
     try {
       const res = await fetch("/api/process", {
@@ -656,6 +669,7 @@
     } catch (err) {
       alert("Pipeline Error: " + err.message);
     } finally {
+      clearInterval(progressInterval);
       dom.btnProcess.disabled = false;
       dom.processSpinner.classList.add("hidden");
       if (btnTextSpan) btnTextSpan.textContent = originalBtnText;

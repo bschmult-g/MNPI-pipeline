@@ -575,10 +575,13 @@ def run_two_agent_pipeline(
     )
 
     logger.info("Executing Agent 1 (mnpi-fact-checker-agent) flow...")
+    print(f"   🤖 [1/2] Fact Checker analyzing text with Gemini ({fc_runtime.model})...", flush=True)
     dossier_dict = fc_runtime.query(text)
     dossier = FactCheckingDossier.model_validate(dossier_dict)
+    print(f"   ✅ [1/2] Fact Checker complete: {len(dossier.entities.entities)} entities, {len(dossier.triggers.triggers)} triggers. Public verified: {dossier.public_check.is_publicly_verified}.", flush=True)
 
     logger.info("Agent 1 flow completed. Transmitting results payload to Agent 2 (mnpi-decision-authority-agent)...")
+    print(f"   ⚖️  [2/2] Decision Authority evaluating 4 Tests with Gemini ({da_runtime.model})...", flush=True)
     verdict_dict = da_runtime.query(
         text=text,
         dossier=dossier_dict,
@@ -587,6 +590,7 @@ def run_two_agent_pipeline(
         log_to_bq=log_to_bq,
     )
     verdict = ArbiterVerdict.model_validate(verdict_dict)
+    print(f"   ✅ [2/2] Arbiter complete: Verdict={verdict.verdict}, Risk={verdict.risk_level}.", flush=True)
 
     return dossier, verdict
 
