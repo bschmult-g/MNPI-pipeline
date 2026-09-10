@@ -1,20 +1,11 @@
 {
   "tag_version": "1.0",
-  "document_id": "document.txt",
+  "document_id": "Project_Titan_Executive_Brief.txt",
   "classification_tier": "MNPI_CRITICAL",
-  "clearance_rank": 4,
-  "min_role_required": "VICE_PRESIDENT",
-  "permitted_departments": [
-    "LEGAL",
-    "COMPLIANCE",
-    "INVESTMENT_BANKING",
-    "EXECUTIVE_COMMITTEE"
-  ],
-  "permitted_groups": [
-    "grp-mnpi-cleared-vp",
-    "grp-compliance-officers",
-    "grp-legal-counsel"
-  ],
+  "clearance_rank": null,
+  "min_role_required": null,
+  "permitted_departments": [],
+  "permitted_groups": [],
   "ticker_restrictions": [],
   "routing_action": "REDACT_AND_PROCEED",
   "is_redacted": true,

@@ -29,11 +29,11 @@ from demo.demo_server import app, QUARANTINE_DIR
 
 
 class TestSecurityEntitlementsTagging(unittest.TestCase):
-    """Unit tests validating the hierarchical security entitlements tagging."""
+    """Unit tests validating security tagging with nullified clearance rank pending entitlement carveouts."""
 
-    def test_clearance_rank_hierarchy_mapping(self):
-        """Validates that each compliance tier maps strictly to its designated clearance rank."""
-        # 1. Critical MNPI -> Rank 4
+    def test_nullified_clearance_rank_and_classification_mapping(self):
+        """Validates that clearance_rank and role requirements are nullified while preserving classification."""
+        # 1. Critical MNPI -> Clearance rank nullified, Tier MNPI_CRITICAL
         dossier_critical = FactCheckingDossier(
             original_text="Secret Project Titan acquisition of TechCo for $2.4B.",
             entities=EntityExtractionResult(
@@ -64,16 +64,16 @@ class TestSecurityEntitlementsTagging(unittest.TestCase):
         self.assertIsNotNone(verdict_critical.entitlements)
         ent = verdict_critical.entitlements
 
-        self.assertEqual(ent.clearance_rank, 4)
-        self.assertEqual(ent.min_role_required, "VICE_PRESIDENT")
+        # Clearance rank and min_role must be nullified (None)
+        self.assertIsNone(ent.clearance_rank)
+        self.assertIsNone(ent.min_role_required)
         self.assertEqual(ent.classification_tier, "MNPI_CRITICAL")
-        self.assertIn("INVESTMENT_BANKING", ent.permitted_departments)
-        self.assertIn("LEGAL", ent.permitted_departments)
+        self.assertEqual(ent.permitted_departments, [])
         self.assertIn("TECH", ent.ticker_restrictions)
         self.assertIsNotNone(ent.audit_hash)
         self.assertTrue(ent.audit_hash.startswith("sha256:"))
 
-        # 2. Potential MNPI -> Rank 3
+        # 2. Potential MNPI -> Clearance rank nullified, Tier MNPI_HIGH
         dossier_potential = FactCheckingDossier(
             original_text="Supplier component shipment indicates potential next-quarter launch delay.",
             entities=EntityExtractionResult(
@@ -98,11 +98,11 @@ class TestSecurityEntitlementsTagging(unittest.TestCase):
         )
 
         verdict_potential = run_offline_arbiter(dossier_potential, document_name="project_falcon.txt")
-        self.assertEqual(verdict_potential.entitlements.clearance_rank, 3)
-        self.assertEqual(verdict_potential.entitlements.min_role_required, "SENIOR_ASSOCIATE")
+        self.assertIsNone(verdict_potential.entitlements.clearance_rank)
+        self.assertIsNone(verdict_potential.entitlements.min_role_required)
         self.assertEqual(verdict_potential.entitlements.classification_tier, "MNPI_HIGH")
 
-        # 3. Public Non-Material / Cleared -> Rank 1 or 2
+        # 3. Public Non-Material / Cleared -> Clearance rank nullified, Tier PUBLIC_UNRESTRICTED
         dossier_cleared = FactCheckingDossier(
             original_text="Routine operational quarterly facilities sync.",
             entities=EntityExtractionResult(entities=[], tickers_found=[], summary="Clean"),
@@ -112,20 +112,20 @@ class TestSecurityEntitlementsTagging(unittest.TestCase):
             high_risk_signals_present=False,
         )
         verdict_cleared = run_offline_arbiter(dossier_cleared, document_name="facilities_sync.txt")
-        self.assertEqual(verdict_cleared.entitlements.clearance_rank, 1)
-        self.assertEqual(verdict_cleared.entitlements.min_role_required, "ANY")
+        self.assertIsNone(verdict_cleared.entitlements.clearance_rank)
+        self.assertIsNone(verdict_cleared.entitlements.min_role_required)
         self.assertEqual(verdict_cleared.entitlements.classification_tier, "PUBLIC_UNRESTRICTED")
 
-    def test_gcs_metadata_export(self):
-        """Validates that to_gcs_metadata() produces standard key-values formatted for object storage."""
+    def test_gcs_metadata_export_with_null_rank(self):
+        """Validates that to_gcs_metadata() serializes null clearance rank safely."""
         tag = SecurityEntitlementsTag(
             tag_version="1.0",
             document_id="deal_memo_2026.pdf",
             classification_tier="MNPI_CRITICAL",
-            clearance_rank=4,
-            min_role_required="VICE_PRESIDENT",
-            permitted_departments=["LEGAL", "COMPLIANCE"],
-            permitted_groups=["grp-mnpi-cleared-vp"],
+            clearance_rank=None,
+            min_role_required=None,
+            permitted_departments=[],
+            permitted_groups=[],
             ticker_restrictions=["AAPL", "MSFT"],
             routing_action="BLOCK_COMMUNICATION",
             is_redacted=False,
@@ -133,9 +133,9 @@ class TestSecurityEntitlementsTagging(unittest.TestCase):
         )
 
         metadata = tag.to_gcs_metadata()
-        self.assertEqual(metadata["mnpi-clearance-rank"], "4")
+        self.assertEqual(metadata["mnpi-clearance-rank"], "null")
         self.assertEqual(metadata["mnpi-classification"], "MNPI_CRITICAL")
-        self.assertEqual(metadata["mnpi-min-role"], "VICE_PRESIDENT")
+        self.assertEqual(metadata["mnpi-min-role"], "unassigned")
         self.assertEqual(metadata["mnpi-routing-action"], "BLOCK_COMMUNICATION")
         self.assertEqual(metadata["mnpi-is-redacted"], "false")
         self.assertEqual(metadata["mnpi-tickers"], "AAPL,MSFT")
@@ -149,60 +149,35 @@ class TestEntitlementsApiAndSidecar(unittest.TestCase):
     def setUpClass(cls):
         cls.client = TestClient(app)
 
-    def test_entitlements_verify_endpoint(self):
-        """Validates policy enforcement checking user role against required clearance rank."""
-        # 1. Analyst (Rank 2) attempts to access Rank 4 document -> Denied
+    def test_entitlements_verify_endpoint_nullified_rank(self):
+        """Validates policy enforcement when clearance_rank is nullified (unassigned)."""
+        # 1. Access check with nullified clearance rank -> Allowed with unassigned notification
         res = self.client.post("/api/entitlements/verify", json={
             "user_role": "ANALYST",
-            "clearance_rank": 4,
+            "clearance_rank": None,
             "entitlements": {
-                "clearance_rank": 4,
+                "clearance_rank": None,
                 "classification_tier": "MNPI_CRITICAL",
-                "min_role_required": "VICE_PRESIDENT",
-                "permitted_departments": ["INVESTMENT_BANKING", "LEGAL"],
-            }
-        })
-        self.assertEqual(res.status_code, 200)
-        data = res.json()
-        self.assertFalse(data["access_granted"])
-        self.assertEqual(data["user_rank"], 2)
-        self.assertEqual(data["required_rank"], 4)
-        self.assertIn("Access Denied", data["reason"])
-
-        # 2. Vice President (Rank 4) attempts to access Rank 4 document -> Granted
-        res = self.client.post("/api/entitlements/verify", json={
-            "user_role": "VICE_PRESIDENT",
-            "clearance_rank": 4,
-            "entitlements": {
-                "clearance_rank": 4,
-                "classification_tier": "MNPI_CRITICAL",
-                "min_role_required": "VICE_PRESIDENT",
-                "permitted_departments": ["INVESTMENT_BANKING", "LEGAL"],
+                "min_role_required": None,
+                "permitted_departments": [],
             }
         })
         self.assertEqual(res.status_code, 200)
         data = res.json()
         self.assertTrue(data["access_granted"])
-        self.assertIn("Access Granted", data["reason"])
+        self.assertIsNone(data["required_rank"])
+        self.assertIn("Role Entitlements Unassigned", data["reason"])
 
-        # 3. Senior Associate (Rank 3) accesses Rank 3 document -> Granted
-        res = self.client.post("/api/entitlements/verify", json={
-            "user_role": "SENIOR_ASSOCIATE",
-            "clearance_rank": 3,
+        # 2. When explicit rank is provided, role ranking inequality is preserved
+        res_explicit = self.client.post("/api/entitlements/verify", json={
+            "user_role": "ANALYST",
+            "clearance_rank": 4,
         })
-        self.assertEqual(res.status_code, 200)
-        self.assertTrue(res.json()["access_granted"])
-
-        # 4. External Guest (Rank 1) accesses Rank 2 document -> Denied
-        res = self.client.post("/api/entitlements/verify", json={
-            "user_role": "EXTERNAL_GUEST",
-            "clearance_rank": 2,
-        })
-        self.assertEqual(res.status_code, 200)
-        self.assertFalse(res.json()["access_granted"])
+        self.assertEqual(res_explicit.status_code, 200)
+        self.assertFalse(res_explicit.json()["access_granted"])
 
     def test_process_generates_sidecar_file(self):
-        """Validates that processing a document generates <doc>.entitlements.json on disk."""
+        """Validates that processing a document generates <doc>.entitlements.json on disk with null rank."""
         doc_title = "CI_Entitlements_Proof_Doc.txt"
         text = "Confidential: Project Titan acquisition of TechCo for $2.4B next Tuesday. Do not share."
 
@@ -218,8 +193,9 @@ class TestEntitlementsApiAndSidecar(unittest.TestCase):
         self.assertIn("sidecar_file", payload)
 
         ent = payload["entitlements"]
-        self.assertEqual(ent["clearance_rank"], 4)
-        self.assertEqual(ent["min_role_required"], "VICE_PRESIDENT")
+        self.assertIsNone(ent["clearance_rank"])
+        self.assertIsNone(ent["min_role_required"])
+        self.assertEqual(ent["classification_tier"], "MNPI_CRITICAL")
 
         # Verify sidecar file exists on disk
         sidecar_filename = f"{doc_title}.entitlements.json"
@@ -228,7 +204,7 @@ class TestEntitlementsApiAndSidecar(unittest.TestCase):
 
         # Verify sidecar content
         stored_manifest = json.loads(sidecar_path.read_text(encoding="utf-8"))
-        self.assertEqual(stored_manifest["clearance_rank"], 4)
+        self.assertIsNone(stored_manifest["clearance_rank"])
         self.assertEqual(stored_manifest["classification_tier"], "MNPI_CRITICAL")
 
         # Verify GET /api/documents/{doc_title}/entitlements endpoint
@@ -236,7 +212,7 @@ class TestEntitlementsApiAndSidecar(unittest.TestCase):
         self.assertEqual(res_get.status_code, 200)
         get_data = res_get.json()
         self.assertEqual(get_data["document_name"], doc_title)
-        self.assertEqual(get_data["entitlements"]["clearance_rank"], 4)
+        self.assertIsNone(get_data["entitlements"]["clearance_rank"])
 
         # Clean up test sidecar file
         if sidecar_path.exists():

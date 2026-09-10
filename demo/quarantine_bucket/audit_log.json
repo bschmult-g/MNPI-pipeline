@@ -1,5 +1,27 @@
 [
   {
+    "timestamp": "2026-09-10T17:34:40.844106+00:00",
+    "document_name": "CI_Entitlements_Proof_Doc.txt",
+    "channel": "slack",
+    "verdict": "MNPI_CONFIRMED",
+    "risk_level": "CRITICAL",
+    "clearance_rank": null,
+    "entitlements_json": "{\"tag_version\": \"1.0\", \"document_id\": \"CI_Entitlements_Proof_Doc.txt\", \"classification_tier\": \"MNPI_CRITICAL\", \"clearance_rank\": null, \"min_role_required\": null, \"permitted_departments\": [], \"permitted_groups\": [], \"ticker_restrictions\": [], \"routing_action\": \"REDACT_AND_PROCEED\", \"is_redacted\": true, \"audit_hash\": \"sha256:b3ce4a1f205f0c78b73f15dbe851976d65e4792624d975ce0feaf55b332ea02e\", \"created_at\": \"2026-09-10T17:34:39.368333+00:00\"}",
+    "recommended_action": "BLOCK_COMMUNICATION",
+    "materiality_score": 0.98,
+    "public_availability_score": 1.0,
+    "source_duty_score": 0.95,
+    "harm_score": 0.95,
+    "entities_detected": "",
+    "triggers_detected": "",
+    "has_secrecy_markers": false,
+    "audit_hash": "sha256:b3ce4a1f205f0c78b73f15dbe851976d65e4792624d975ce0feaf55b332ea02e",
+    "summary_justification": "COMMUNICATION BLOCKED: Document contains confirmed Material Non-Public Information regarding a $2.4B corporate transaction under project codename 'Project Titan'. Unrestricted transmission constitutes a direct breach of confidentiality covenants and securities insider trading regulations under SEC Rule 10b-5.",
+    "redacted_preview": "Confidential: [REDACTED MNPI CONTENT] acquisition of [REDACTED MNPI CONTENT] for [REDACTED MNPI CONTENT] [REDACTED MNPI CONTENT]. Do not share.",
+    "latency_ms": 19632.08,
+    "model_used": "gemini-3.8-flash"
+  },
+  {
     "timestamp": "2026-09-10T17:27:46.765080+00:00",
     "document_name": "CI_Entitlements_Proof_Doc.txt",
     "channel": "slack",

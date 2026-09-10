@@ -285,29 +285,11 @@ def derive_security_entitlements(
     document_name: Optional[str] = None,
     audit_hash: Optional[str] = None,
 ) -> SecurityEntitlementsTag:
-    """Derives machine-enforceable security and access entitlement metadata from Arbiter assessment.
+    """Derives machine-enforceable security and classification metadata from Arbiter assessment.
 
-    Mapping Hierarchy:
-    - MNPI_CONFIRMED (Critical):
-        Clearance Rank 4, Role VICE_PRESIDENT / LEGAL_COMPLIANCE,
-        Departments: LEGAL, COMPLIANCE, INVESTMENT_BANKING, EXECUTIVE_COMMITTEE
-        Groups: grp-mnpi-cleared-vp, grp-compliance-officers, grp-legal-counsel
-        Routing: BLOCK_COMMUNICATION (or REDACT_AND_PROCEED if redacted)
-    - POTENTIAL_MNPI (High):
-        Clearance Rank 3, Role SENIOR_ASSOCIATE,
-        Departments: LEGAL, COMPLIANCE, INVESTMENT_BANKING, RESEARCH_MANAGEMENT
-        Groups: grp-mnpi-cleared-vp, grp-compliance-officers, grp-senior-associates
-        Routing: ESCALATE_TO_COMPLIANCE
-    - PUBLIC_NON_MATERIAL (Medium/Low):
-        Clearance Rank 2, Role ANALYST,
-        Departments: RESEARCH, EQUITY_ANALYST, TRADING, INVESTMENT_BANKING, COMPLIANCE
-        Groups: grp-equity-analysts, grp-research-staff, grp-trading-desk
-        Routing: APPROVE_RELEASE
-    - CLEARED (Low):
-        Clearance Rank 1, Role ANY,
-        Departments: ALL_DEPARTMENTS, PUBLIC_DOMAIN
-        Groups: grp-all-employees, grp-public-facing
-        Routing: APPROVE_RELEASE
+    Note: Security clearance rank and role-based entitlement mappings are nullified (None)
+    pending organizational policy carveout. Document retains full compliance classification
+    and automated routing directives.
     """
     verdict_str = verdict.verdict
     risk_level = verdict.risk_level
@@ -323,34 +305,25 @@ def derive_security_entitlements(
 
     is_redacted = bool(verdict.redacted_text and verdict.redacted_text != getattr(dossier, "original_text", ""))
 
+    # Compliance classification and routing logic:
     if verdict_str == "MNPI_CONFIRMED" or risk_level == "CRITICAL":
         tier = "MNPI_CRITICAL"
-        rank = 4
-        role = "VICE_PRESIDENT"
-        depts = ["LEGAL", "COMPLIANCE", "INVESTMENT_BANKING", "EXECUTIVE_COMMITTEE"]
-        groups = ["grp-mnpi-cleared-vp", "grp-compliance-officers", "grp-legal-counsel"]
         action = "REDACT_AND_PROCEED" if is_redacted else "BLOCK_COMMUNICATION"
     elif verdict_str == "POTENTIAL_MNPI" or risk_level == "HIGH":
         tier = "MNPI_HIGH"
-        rank = 3
-        role = "SENIOR_ASSOCIATE"
-        depts = ["LEGAL", "COMPLIANCE", "INVESTMENT_BANKING", "RESEARCH_MANAGEMENT"]
-        groups = ["grp-mnpi-cleared-vp", "grp-compliance-officers", "grp-senior-associates"]
         action = "ESCALATE_TO_COMPLIANCE"
     elif verdict_str == "PUBLIC_NON_MATERIAL":
         tier = "INTERNAL_CONFIDENTIAL"
-        rank = 2
-        role = "ANALYST"
-        depts = ["RESEARCH", "EQUITY_ANALYST", "TRADING", "INVESTMENT_BANKING", "COMPLIANCE"]
-        groups = ["grp-equity-analysts", "grp-research-staff", "grp-trading-desk"]
         action = "APPROVE_RELEASE"
     else:  # CLEARED / LOW
         tier = "PUBLIC_UNRESTRICTED"
-        rank = 1
-        role = "ANY"
-        depts = ["ALL_DEPARTMENTS", "PUBLIC_DOMAIN"]
-        groups = ["grp-all-employees", "grp-public-facing"]
         action = "APPROVE_RELEASE"
+
+    # Security rank and role-based entitlements are nullified pending organizational carveout
+    rank = None
+    role = None
+    depts: List[str] = []
+    groups: List[str] = []
 
     # Compute audit hash if not provided
     computed_hash = audit_hash
@@ -842,7 +815,8 @@ def run_two_agent_pipeline(
             dossier=dossier,
             document_name=document_name,
         )
-    print(f"   ✅ [2/2] Arbiter complete: Verdict={verdict.verdict}, Risk={verdict.risk_level}, Clearance=Rank {verdict.entitlements.clearance_rank}.", flush=True)
+    clearance_disp = f"Rank {verdict.entitlements.clearance_rank}" if (verdict.entitlements and verdict.entitlements.clearance_rank is not None) else "Unassigned (Null)"
+    print(f"   ✅ [2/2] Arbiter complete: Verdict={verdict.verdict}, Risk={verdict.risk_level}, Clearance={clearance_disp}.", flush=True)
 
     return dossier, verdict
 

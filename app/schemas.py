@@ -275,18 +275,14 @@ class SecurityEntitlementsTag(BaseModel):
         "INTERNAL_CONFIDENTIAL",
         "PUBLIC_UNRESTRICTED"
     ] = Field(description="Normalized enterprise classification tier")
-    clearance_rank: int = Field(
-        ge=1,
-        le=4,
-        description="Hierarchical clearance rank: 1=Public, 2=Internal Analyst, 3=Senior Associate, 4=VP / Legal Counsel"
+    clearance_rank: Optional[int] = Field(
+        default=None,
+        description="Hierarchical clearance rank (Nullified/Unassigned pending organizational entitlement carveout)"
     )
-    min_role_required: Literal[
-        "ANY",
-        "ANALYST",
-        "SENIOR_ASSOCIATE",
-        "VICE_PRESIDENT",
-        "LEGAL_COMPLIANCE"
-    ] = Field(description="Minimum job role required to access unredacted source content")
+    min_role_required: Optional[str] = Field(
+        default=None,
+        description="Minimum job role required (Nullified/Unassigned pending organizational entitlement carveout)"
+    )
     permitted_departments: List[str] = Field(
         default_factory=list,
         description="List of enterprise departments permitted access (e.g. INVESTMENT_BANKING, LEGAL, COMPLIANCE)"
@@ -323,8 +319,8 @@ class SecurityEntitlementsTag(BaseModel):
         return {
             "mnpi-tag-version": self.tag_version,
             "mnpi-classification": self.classification_tier,
-            "mnpi-clearance-rank": str(self.clearance_rank),
-            "mnpi-min-role": self.min_role_required,
+            "mnpi-clearance-rank": str(self.clearance_rank) if self.clearance_rank is not None else "null",
+            "mnpi-min-role": self.min_role_required or "unassigned",
             "mnpi-routing-action": self.routing_action,
             "mnpi-is-redacted": str(self.is_redacted).lower(),
             "mnpi-audit-hash": self.audit_hash or "",

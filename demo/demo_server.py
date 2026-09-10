@@ -817,16 +817,31 @@ def verify_document_entitlements(req: VerifyEntitlementsRequest):
             except Exception:
                 pass
 
-    if not required_rank and tag_data:
+    if required_rank is None and tag_data:
         required_rank = tag_data.get("clearance_rank")
-
-    if required_rank is None:
-        required_rank = 1
 
     permitted_depts = tag_data.get("permitted_departments", [])
     tier = tag_data.get("classification_tier", "PUBLIC_UNRESTRICTED")
     action = tag_data.get("routing_action", "APPROVE_RELEASE")
     is_redacted = tag_data.get("is_redacted", False)
+
+    # If clearance_rank is nullified (unassigned), bypass role ranking inequality check
+    if required_rank is None:
+        return {
+            "access_granted": True,
+            "user_role": user_role_norm,
+            "user_rank": user_rank,
+            "required_rank": None,
+            "classification_tier": tier,
+            "routing_action": action,
+            "is_redacted": is_redacted,
+            "permitted_departments": permitted_depts,
+            "reason": (
+                f"Role Entitlements Unassigned: Security clearance rank is currently nullified (unassigned). "
+                f"Role-based restrictions are bypassed; access is subject to compliance routing '{action}'."
+            ),
+            "document_name": doc_name,
+        }
 
     # Access evaluation: rank inequality check (user.rank >= doc.clearance_rank)
     rank_granted = user_rank >= required_rank

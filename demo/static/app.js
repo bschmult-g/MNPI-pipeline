@@ -922,7 +922,8 @@
       return;
     }
 
-    const rank = ent.clearance_rank || 1;
+    const rank = ent.clearance_rank;
+    const isRankNull = rank === null || rank === undefined;
     const rankLabels = {
       1: "Rank 1: Public / Any",
       2: "Rank 2: Analyst+",
@@ -930,11 +931,17 @@
       4: "Rank 4: VP & Legal Only",
     };
 
-    dom.entRankBadge.className = "badge-rank rank-" + rank;
-    dom.entRankBadge.textContent = rankLabels[rank] || ("Rank " + rank);
-
-    if (dom.entTier) dom.entTier.textContent = ent.classification_tier || "-";
-    if (dom.entMinRole) dom.entMinRole.textContent = ent.min_role_required || "-";
+    if (isRankNull) {
+      dom.entRankBadge.className = "badge-rank rank-null";
+      dom.entRankBadge.textContent = "Rank: Nullified (Unassigned)";
+      if (dom.entTier) dom.entTier.textContent = ent.classification_tier || "-";
+      if (dom.entMinRole) dom.entMinRole.textContent = "Unassigned (Pending Carveout)";
+    } else {
+      dom.entRankBadge.className = "badge-rank rank-" + rank;
+      dom.entRankBadge.textContent = rankLabels[rank] || ("Rank " + rank);
+      if (dom.entTier) dom.entTier.textContent = ent.classification_tier || "-";
+      if (dom.entMinRole) dom.entMinRole.textContent = ent.min_role_required || "-";
+    }
 
     // Render department chips
     if (dom.entDepartments) {
@@ -948,7 +955,7 @@
           dom.entDepartments.appendChild(chip);
         });
       } else {
-        dom.entDepartments.innerHTML = '<span class="placeholder-text">All Departments</span>';
+        dom.entDepartments.innerHTML = '<span class="placeholder-text">All Departments (No Carveout)</span>';
       }
     }
 
@@ -982,7 +989,11 @@
     // Reset simulator result box
     if (dom.simResultBox) {
       dom.simResultBox.className = "sim-result-box neutral";
-      dom.simResultBox.textContent = `Document requires ${rankLabels[rank] || "Rank " + rank}. Select a role and test policy access.`;
+      if (isRankNull) {
+        dom.simResultBox.textContent = "Security clearance rank is currently nullified (unassigned). Downstream role restrictions are not enforced pending organizational carveout.";
+      } else {
+        dom.simResultBox.textContent = `Document requires ${rankLabels[rank] || "Rank " + rank}. Select a role and test policy access.`;
+      }
     }
   }
 
@@ -1280,12 +1291,17 @@
 
       // 3b. Clearance Rank Badge
       const tdRank = document.createElement("td");
-      const rankVal = rec.clearance_rank || (rec.verdict === "MNPI_CONFIRMED" ? 4 : rec.verdict === "POTENTIAL_MNPI" ? 3 : rec.verdict === "PUBLIC_NON_MATERIAL" ? 2 : 1);
+      const hasRank = rec.clearance_rank !== null && rec.clearance_rank !== undefined;
       const rankPill = document.createElement("span");
-      rankPill.className = "badge-rank rank-" + rankVal;
+      if (hasRank) {
+        rankPill.className = "badge-rank rank-" + rec.clearance_rank;
+        rankPill.textContent = "Rank " + rec.clearance_rank;
+      } else {
+        rankPill.className = "badge-rank rank-null";
+        rankPill.textContent = "Null";
+      }
       rankPill.style.fontSize = "0.7rem";
       rankPill.style.padding = "0.15rem 0.45rem";
-      rankPill.textContent = "Rank " + rankVal;
       tdRank.appendChild(rankPill);
       tr.appendChild(tdRank);
 
@@ -1417,7 +1433,7 @@
 
     appendField("Verdict", rec.verdict || "N/A");
     appendField("Risk Level", rec.risk_level || "N/A");
-    appendField("Clearance Rank", "Rank " + (rec.clearance_rank || 1));
+    appendField("Clearance Rank", (rec.clearance_rank !== null && rec.clearance_rank !== undefined) ? ("Rank " + rec.clearance_rank) : "Nullified (Unassigned)");
     appendField("Recommended Action", rec.recommended_action || "N/A");
     appendField("Ingestion Channel", rec.channel || "N/A");
     appendField("Model Used", rec.model_used || "gemini-3.8-flash");

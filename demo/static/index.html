@@ -367,10 +367,10 @@
           <div class="agent-avatar" style="background: linear-gradient(135deg, #6366f1, #0284c7);">&#128273;</div>
           <div style="flex: 1;">
             <div style="display: flex; align-items: center; justify-content: space-between;">
-              <h3>Security &amp; Entitlements Tag</h3>
-              <span id="ent-rank-badge" class="badge-rank rank-none">Rank -</span>
+              <h3>Security &amp; Classification Tag</h3>
+              <span id="ent-rank-badge" class="badge-rank rank-null">Rank: Null</span>
             </div>
-            <span class="agent-role">Indexable downstream access manifest &amp; GCS object metadata</span>
+            <span class="agent-role">Indexable compliance metadata &amp; storage sidecar (Rank unassigned)</span>
           </div>
         </div>
 
@@ -381,12 +381,12 @@
               <strong id="ent-tier">-</strong>
             </div>
             <div class="ent-item">
-              <span class="ent-label">Min Role Required:</span>
-              <strong id="ent-min-role">-</strong>
+              <span class="ent-label">Role Entitlement:</span>
+              <strong id="ent-min-role">Unassigned (Pending Carveout)</strong>
             </div>
             <div class="ent-item full-width">
               <span class="ent-label">Permitted Departments:</span>
-              <div id="ent-departments" class="ent-chips-wrap"><span class="placeholder-text">None</span></div>
+              <div id="ent-departments" class="ent-chips-wrap"><span class="placeholder-text">All Departments (No Carveout)</span></div>
             </div>
             <div class="ent-item full-width">
               <span class="ent-label">Associated Tickers:</span>
@@ -396,7 +396,7 @@
 
           <!-- Interactive Downstream Access Policy Tester -->
           <div class="entitlements-simulator">
-            <div class="simulator-title">&#9881;&#65039; Test Downstream Access Policy</div>
+            <div class="simulator-title">&#9881;&#65039; Downstream Policy &amp; Routing Check</div>
             <div class="simulator-controls">
               <label for="sim-user-role">Simulate Role:</label>
               <select id="sim-user-role" class="form-select-sm">
