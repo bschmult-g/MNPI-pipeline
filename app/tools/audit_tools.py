@@ -8,13 +8,20 @@ from __future__ import annotations
 
 import logging
 from typing import Any, Dict, Optional
-from audit_logger import (
-    get_bigquery_client,
-    get_table_full_id,
-    compute_audit_hash,
-)
-from datetime import datetime, timezone
-from config import settings
+try:
+    from app.audit_logger import (
+        get_bigquery_client,
+        get_table_full_id,
+        compute_audit_hash,
+    )
+    from app.config import settings
+except ImportError:
+    from audit_logger import (
+        get_bigquery_client,
+        get_table_full_id,
+        compute_audit_hash,
+    )
+    from config import settings
 
 logger = logging.getLogger(__name__)
 

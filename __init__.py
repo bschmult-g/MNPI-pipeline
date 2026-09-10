@@ -1,13 +1,6 @@
 """MNPI Google ADK Compliance System Package."""
 
-import os
-import sys
-
-_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-if _CURRENT_DIR not in sys.path:
-    sys.path.insert(0, _CURRENT_DIR)
-
-from schemas import (
+from app.schemas import (
     ArbiterVerdict,
     CriteriaAssessment,
     EntityExtractionResult,
@@ -17,11 +10,13 @@ from schemas import (
     TriggerDetectionResult,
     TriggerItem,
 )
-from fact_checker_agent import create_fact_checker_agent
-from arbiter_agent import create_arbiter_agent
-from workflow import build_mnpi_workflow, create_mnpi_runner, run_pipeline
+from app.agents.fact_checker import create_fact_checker_agent
+from app.agents.arbiter import create_arbiter_agent
+from app.workflow import build_mnpi_workflow, create_mnpi_runner, run_pipeline
+from app.agent import app
 
 __all__ = [
+    "app",
     "create_fact_checker_agent",
     "create_arbiter_agent",
     "build_mnpi_workflow",
@@ -30,3 +25,4 @@ __all__ = [
     "FactCheckingDossier",
     "ArbiterVerdict",
 ]
+

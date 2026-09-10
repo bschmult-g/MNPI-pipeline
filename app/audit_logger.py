@@ -21,13 +21,26 @@ from typing import Any, Dict, List, Optional
 from google.cloud import bigquery
 from google.oauth2.credentials import Credentials
 
-from config import settings
-from schemas import ArbiterVerdict, FactCheckingDossier
+from app.config import settings
+from app.schemas import ArbiterVerdict, FactCheckingDossier
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_DATASET = "mnpi_compliance_audit"
 DEFAULT_TABLE = "document_alignment_log"
+
+
+def get_local_audit_log_path() -> Path:
+    """Resolves path to the offline/local audit log file."""
+    env_path = os.getenv("MNPI_AUDIT_LOG_PATH")
+    if env_path:
+        return Path(env_path)
+    repo_root = Path(__file__).resolve().parent.parent
+    demo_path = repo_root / "demo" / "quarantine_bucket" / "audit_log.json"
+    if demo_path.parent.exists():
+        return demo_path
+    return repo_root / "quarantine_bucket" / "audit_log.json"
+
 
 
 def get_bigquery_client() -> Optional[bigquery.Client]:
@@ -196,7 +209,7 @@ def log_document_alignment_to_bq(
             logger.warning(f"BigQuery log attempt failed for {document_name}: {e}")
 
     # Also mirror locally into audit_log.json for offline resilience
-    local_log_path = Path(__file__).resolve().parent / "quarantine_bucket" / "audit_log.json"
+    local_log_path = get_local_audit_log_path()
     try:
         local_log_path.parent.mkdir(parents=True, exist_ok=True)
         records = []
@@ -269,7 +282,7 @@ def fetch_document_alignment_logs(
             logger.warning(f"Failed to query BigQuery audit logs: {e}")
 
     # Fallback to local mirror
-    local_log_path = Path(__file__).resolve().parent / "quarantine_bucket" / "audit_log.json"
+    local_log_path = get_local_audit_log_path()
     if local_log_path.exists():
         try:
             return json.loads(local_log_path.read_text(encoding="utf-8"))[:limit]

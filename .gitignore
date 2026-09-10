@@ -23,6 +23,10 @@ ENV/
 # Testing & logs
 .pytest_cache/
 *.log
+.eval_results/
+dist/
+build/
+*.egg-info/
 
 # Google ADK local cache & deployment staging
 .adk/

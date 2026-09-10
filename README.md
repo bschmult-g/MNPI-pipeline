@@ -80,30 +80,45 @@ This system implements a two-agent architecture for automated compliance evaluat
 
 ```
 mnpi_adk_agent/
-├── config.py                 # Central configuration, models (gemini-3.8-flash), region (us)
-├── schemas.py                # Pydantic models (SA1, SA2, SA3 outputs, Dossier, ArbiterVerdict)
-├── fact_checker_agent.py     # Agent 1: Coordinates SA1, SA2, SA3 sub-agents as tools
-├── arbiter_agent.py          # Agent 2: Decision Authority applying the 4 Assessment Tests
-├── audit_logger.py           # BigQuery streaming audit logger and historical query engine
-├── deploy_agents.py          # Script to deploy/verify both distinct Reasoning Engines in Vertex AI
-├── workflow.py               # Two-agent sequential pipeline orchestrator and live Gemini runner
-├── demo_server.py            # Local FastAPI demonstration server with interactive dashboard
-├── main.py                   # Interactive CLI and scenario runner
-├── test_suite.py             # Unit and integration test suite (17 comprehensive tests)
+├── pyproject.toml            # agents-cli configuration and project metadata
 ├── requirements.txt          # Python package dependencies
-├── agents/                   # Separate ADK Apps for distinct Reasoning Engine deployment
-│   ├── fact_checker/         # mnpi-fact-checker-agent (ID: 7905177991674593280)
-│   └── decision_authority/   # mnpi-decision-authority-agent (ID: 6736493888371949568)
-├── sub_agents/
-│   ├── __init__.py
-│   ├── entities_agent.py     # SA1: Corporate names, tickers, project codenames
-│   ├── trigger_words_agent.py# SA2: M&A, roadmap, product release, financial triggers
-│   └── public_check_agent.py # SA3: Press/SEC fact-check, linguistic secrecy markers
-└── tools/
-    ├── __init__.py
-    ├── audit_tools.py        # BigQuery compliance audit recording tool
-    ├── entity_tools.py       # Ticker resolution & confidential codename registry
-    └── search_tools.py       # SEC/Wire search & secrecy phrase detection
+├── app/                      # Core Google ADK agent package (agent_directory = "app")
+│   ├── __init__.py           # Package exports
+│   ├── agent.py              # Root ADK App and MNPIComplianceAgentRuntime
+│   ├── config.py             # Central configuration, models (gemini-2.5-flash), settings
+│   ├── schemas.py            # Pydantic schemas (Dossier, 4 Criteria Assessments, ArbiterVerdict)
+│   ├── workflow.py           # Two-agent sequential pipeline orchestrator and live Gemini runner
+│   ├── audit_logger.py       # BigQuery streaming audit logger and SHA-256 tamper-evident hash
+│   ├── agents/               # Canonical ADK agent implementations
+│   │   ├── fact_checker.py   # Agent 1: Coordinates SA1, SA2, SA3 sub-agents as tools
+│   │   ├── arbiter.py        # Agent 2: Decision Authority applying the 4 Assessment Tests
+│   │   └── sub_agents/       # Fact-checking specialized sub-agents
+│   │       ├── entities_agent.py      # SA1: Corporate names, tickers, project codenames
+│   │       ├── trigger_words_agent.py # SA2: M&A, roadmap, product release triggers
+│   │       └── public_check_agent.py  # SA3: Press/SEC fact-check & secrecy markers
+│   └── tools/                # Agent tools
+│       ├── audit_tools.py    # BigQuery compliance audit recording tool
+│       ├── entity_tools.py   # Ticker resolution & confidential codename registry
+│       └── search_tools.py   # SEC/Wire search & secrecy phrase detection
+├── demo/                     # Demonstration web application
+│   ├── demo_server.py        # FastAPI server with compliance inspection dashboard
+│   ├── quarantine_bucket/    # Simulated incoming quarantine storage
+│   └── static/               # Web frontend UI (HTML, CSS, JS)
+├── deployment/               # Vertex AI Reasoning Engine deployment scripts
+│   ├── deploy_agents.py      # Script to deploy/verify Reasoning Engines in Vertex AI
+│   ├── .agent_engine_config.json
+│   └── agents/               # Isolated runtime deployment bundles
+│       ├── fact_checker/
+│       └── decision_authority/
+├── tests/                    # Standard test suite & evalsets
+│   ├── unit/                 # Unit tests (test_compliance_unit.py)
+│   ├── integration/          # Integration tests (test_demo_server.py)
+│   └── eval/                 # Evaluation dataset & Quality Flywheel config
+├── main.py                   # Root CLI and scenario runner delegating to app
+├── agent.py                  # Backward-compatible root ADK entrypoint
+├── demo_server.py            # Root demo server delegator
+├── deploy_agents.py          # Root deploy script delegator
+└── test_suite.py             # Consolidated test runner across unit & integration tests
 ```
 
 ---

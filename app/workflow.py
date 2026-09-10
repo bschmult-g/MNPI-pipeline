@@ -23,8 +23,8 @@ from google.adk.events import Event
 from google.adk.sessions import InMemorySessionService
 from google.genai.types import Content, Part
 
-from config import settings
-from schemas import (
+from app.config import settings
+from app.schemas import (
     ArbiterVerdict,
     CriteriaAssessment,
     EntityExtractionResult,
@@ -34,10 +34,10 @@ from schemas import (
     TriggerDetectionResult,
     TriggerItem,
 )
-from fact_checker_agent import create_fact_checker_agent
-from arbiter_agent import create_arbiter_agent
-from tools.entity_tools import check_restricted_or_internal_codename, resolve_ticker_and_status
-from tools.search_tools import detect_secrecy_markers, search_public_press_and_filings
+from app.agents.fact_checker import create_fact_checker_agent
+from app.agents.arbiter import create_arbiter_agent
+from app.tools.entity_tools import check_restricted_or_internal_codename, resolve_ticker_and_status
+from app.tools.search_tools import detect_secrecy_markers, search_public_press_and_filings
 
 logger = logging.getLogger(__name__)
 
@@ -155,7 +155,7 @@ def run_offline_fact_checker(text: str) -> FactCheckingDossier:
             )
 
     # Check corporate directory
-    from tools.entity_tools import TICKER_DIRECTORY
+    from app.tools.entity_tools import TICKER_DIRECTORY
     for comp, info in TICKER_DIRECTORY.items():
         if comp in lower_text and not any(e.name.lower() == comp for e in entities_list):
             entities_list.append(
@@ -528,6 +528,10 @@ def run_two_agent_pipeline(
     channel: str = "quarantine_gcs",
     log_to_bq: bool = False,
     force_live: bool = True,
+    model: Optional[str] = None,
+    project_id: Optional[str] = None,
+    location: Optional[str] = None,
+    **kwargs: Any,
 ) -> tuple[FactCheckingDossier, ArbiterVerdict]:
     """Executes the two distinct agent runtimes sequentially with explicit payload handoff.
     
@@ -543,18 +547,22 @@ def run_two_agent_pipeline(
        Applies the 4 mandatory legal Assessment Criteria (Basic Inc., Mosaic, Dirks, Harm).
        Invokes BigQuery audit tool and renders binding ArbiterVerdict.
     """
-    from agents.fact_checker.runtime import MNPIFactCheckerRuntime
-    from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
+    try:
+        from app.agents.fact_checker import MNPIFactCheckerRuntime
+        from app.agents.arbiter import MNPIDecisionAuthorityRuntime
+    except ImportError:
+        from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+        from agents.decision_authority.runtime import MNPIDecisionAuthorityRuntime
 
     fc_runtime = MNPIFactCheckerRuntime(
-        project_id=settings.project_id,
-        location=settings.location,
-        model=settings.default_model,
+        project_id=project_id or settings.project_id,
+        location=location or settings.location,
+        model=model or settings.default_model,
     )
     da_runtime = MNPIDecisionAuthorityRuntime(
-        project_id=settings.project_id,
-        location=settings.location,
-        model=settings.arbiter_model,
+        project_id=project_id or settings.project_id,
+        location=location or settings.location,
+        model=model or settings.arbiter_model,
     )
 
     logger.info("Executing Agent 1 (mnpi-fact-checker-agent) flow...")
@@ -580,6 +588,10 @@ def run_pipeline(
     document_name: Optional[str] = None,
     channel: str = "quarantine_gcs",
     log_to_bq: bool = False,
+    model: Optional[str] = None,
+    project_id: Optional[str] = None,
+    location: Optional[str] = None,
+    **kwargs: Any,
 ) -> tuple[FactCheckingDossier, ArbiterVerdict]:
     """Compatibility wrapper delegating directly to the Two-Agent Pipeline."""
     return run_two_agent_pipeline(
@@ -588,5 +600,9 @@ def run_pipeline(
         channel=channel,
         log_to_bq=log_to_bq,
         force_live=force_live,
+        model=model,
+        project_id=project_id,
+        location=location,
+        **kwargs,
     )
 

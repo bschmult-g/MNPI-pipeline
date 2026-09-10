@@ -13,11 +13,19 @@ from __future__ import annotations
 
 from typing import List, Optional
 from google.adk.agents import Agent
-from config import settings
-from schemas import FactCheckingDossier
-from sub_agents.entities_agent import create_entities_agent
-from sub_agents.trigger_words_agent import create_trigger_words_agent
-from sub_agents.public_check_agent import create_public_check_agent
+
+try:
+    from app.config import settings
+    from app.schemas import FactCheckingDossier
+    from app.agents.sub_agents.entities_agent import create_entities_agent
+    from app.agents.sub_agents.trigger_words_agent import create_trigger_words_agent
+    from app.agents.sub_agents.public_check_agent import create_public_check_agent
+except ImportError:
+    from config import settings
+    from schemas import FactCheckingDossier
+    from sub_agents.entities_agent import create_entities_agent
+    from sub_agents.trigger_words_agent import create_trigger_words_agent
+    from sub_agents.public_check_agent import create_public_check_agent
 
 FACT_CHECKER_SYSTEM_PROMPT = """You are the MPNI Fact Checker Agent, the investigative foundation of the Material Non-Public Information compliance system.
 
@@ -63,3 +71,59 @@ def create_fact_checker_agent(
         sub_agents=[sa1, sa2, sa3],
         output_schema=FactCheckingDossier,
     )
+
+
+import logging
+from typing import Any, Dict
+
+logger = logging.getLogger("mnpi_fact_checker_runtime")
+
+
+class MNPIFactCheckerRuntime:
+    """Vertex AI Reasoning Engine Runtime for Agent 1 (MNPI Fact Checker)."""
+
+    agent_framework: str = "google-adk"
+
+    def __init__(
+        self,
+        project_id: str = "green-carrier-500109-k2",
+        location: str = "us",
+        model: str = "gemini-3.8-flash",
+    ):
+        self.project_id = project_id
+        self.location = location
+        self.model = model
+        self.agent_framework = "google-adk"
+
+    def set_up(self):
+        """Initializes runtime environment upon Vertex AI container startup."""
+        logger.info(
+            f"Initialized MNPIFactCheckerRuntime for project={self.project_id}, "
+            f"location={self.location}, model={self.model}"
+        )
+
+    def query(
+        self,
+        text: Optional[str] = None,
+        prompt: Optional[str] = None,
+        input: Optional[str] = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        document_text = text or prompt or input or kwargs.get("message") or kwargs.get("content") or ""
+        try:
+            from app.workflow import get_genai_client, run_live_fact_checker, run_offline_fact_checker
+        except ImportError:
+            from workflow import get_genai_client, run_live_fact_checker, run_offline_fact_checker
+
+        client = get_genai_client()
+        if client:
+            try:
+                dossier = run_live_fact_checker(client, document_text)
+            except Exception as err:
+                logger.warning(f"Live Fact Checker execution notice ({err}); using deterministic analyzer fallback.")
+                dossier = run_offline_fact_checker(document_text)
+        else:
+            dossier = run_offline_fact_checker(document_text)
+
+        return dossier.model_dump()
+

@@ -1,0 +1,37 @@
+{
+  "criteria": {
+    "rubric_based_final_response_quality_v1": {
+      "threshold": 0.85,
+      "judgeModelOptions": {
+        "judgeModel": "gemini-2.5-flash",
+        "numSamples": 1
+      },
+      "rubrics": [
+        {
+          "rubricId": "materiality_assessment",
+          "rubricContent": {
+            "textProperty": "The response accurately identifies whether the corporate event (M&A, earnings, roadmap change) has material market-moving significance under Basic Inc. v. Levinson."
+          }
+        },
+        {
+          "rubricId": "mosaic_public_verification",
+          "rubricContent": {
+            "textProperty": "The response rigorously distinguishes between information corroborated by public filings/wires vs non-public unconfirmed leaks."
+          }
+        },
+        {
+          "rubricId": "source_duty_and_secrecy",
+          "rubricContent": {
+            "textProperty": "The response detects explicit confidentiality markers ('don't share', 'internal only') and evaluates insider duty breaches."
+          }
+        },
+        {
+          "rubricId": "compliance_verdict_and_action",
+          "rubricContent": {
+            "textProperty": "The response renders an appropriate binding verdict (MNPI_CONFIRMED, POTENTIAL_MNPI, or CLEARED) and recommended action (BLOCK_COMMUNICATION, ESCALATE_TO_COMPLIANCE, or APPROVE_RELEASE)."
+          }
+        }
+      ]
+    }
+  }
+}

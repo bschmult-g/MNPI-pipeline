@@ -12,12 +12,21 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
-from config import settings
-from schemas import PublicCheckResult
-from tools.search_tools import (
-    detect_secrecy_markers,
-    search_public_press_and_filings,
-)
+
+try:
+    from app.config import settings
+    from app.schemas import PublicCheckResult
+    from app.tools.search_tools import (
+        detect_secrecy_markers,
+        search_public_press_and_filings,
+    )
+except ImportError:
+    from config import settings
+    from schemas import PublicCheckResult
+    from tools.search_tools import (
+        detect_secrecy_markers,
+        search_public_press_and_filings,
+    )
 
 PUBLIC_CHECK_AGENT_INSTRUCTION = """You are SA3: Public Availability & Secrecy Specialist, a specialized sub-agent tool for the MNPI Fact Checker.
 

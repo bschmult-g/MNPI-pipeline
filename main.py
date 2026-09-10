@@ -19,8 +19,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from schemas import ArbiterVerdict, FactCheckingDossier
-from workflow import run_pipeline
+try:
+    from app.schemas import ArbiterVerdict, FactCheckingDossier
+    from app.workflow import run_pipeline
+except ImportError:
+    from schemas import ArbiterVerdict, FactCheckingDossier
+    from workflow import run_pipeline
 
 SAMPLE_SCENARIOS = {
     "leak": (

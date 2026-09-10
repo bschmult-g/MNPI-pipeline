@@ -9,7 +9,10 @@ Provides capabilities to:
 from __future__ import annotations
 
 from typing import Any, Dict
-from config import settings
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
 
 
 # Sample compliance watchlist and ticker database

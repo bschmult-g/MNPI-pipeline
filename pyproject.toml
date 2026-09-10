@@ -1,0 +1,45 @@
+[project]
+name = "mnpi-compliance-agent"
+version = "0.1.0"
+description = "Material Non-Public Information (MNPI) Compliance Detection & Arbitration Agent System"
+authors = [
+    {name = "Compliance Engineering Team", email = "compliance@example.com"},
+]
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "google-cloud-aiplatform>=1.70.0",
+    "google-adk[a2a]==2.7.1",
+    "google-genai>=2.18.0",
+    "pydantic>=2.10.0",
+    "google-cloud-bigquery>=3.25.0",
+    "google-cloud-storage>=2.14.0",
+    "python-dotenv>=1.0.0",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "pypdf>=5.0.0",
+    "python-docx>=1.1.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.6",
+]
+
+[tool.agents-cli]
+name = "mnpi-compliance-agent"
+description = "Material Non-Public Information (MNPI) Compliance Detection & Arbitration Agent System"
+agent_directory = "app"
+acli_version = "0.1.3"
+region = "us-central1"
+
+[tool.agents-cli.create_params]
+deployment_target = "agent_runtime"
+is_a2a = false
+include_data_ingestion = false
+cicd_runner = "github_actions"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

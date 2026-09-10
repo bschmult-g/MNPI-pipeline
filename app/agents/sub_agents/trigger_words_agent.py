@@ -13,8 +13,13 @@ automatically as a tool.
 from __future__ import annotations
 
 from google.adk.agents import Agent
-from config import settings
-from schemas import TriggerDetectionResult
+
+try:
+    from app.config import settings
+    from app.schemas import TriggerDetectionResult
+except ImportError:
+    from config import settings
+    from schemas import TriggerDetectionResult
 
 TRIGGER_WORDS_AGENT_INSTRUCTION = """You are SA2: Trigger Words Detection Specialist, a specialized sub-agent tool for the MNPI Fact Checker.
 

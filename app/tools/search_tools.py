@@ -8,8 +8,10 @@ Provides capabilities to:
 from __future__ import annotations
 
 import re
-from typing import Dict, List
-from config import settings
+try:
+    from app.config import settings
+except ImportError:
+    from config import settings
 
 
 # Pre-populated mock database of public press releases and SEC filings

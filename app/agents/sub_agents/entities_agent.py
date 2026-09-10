@@ -13,12 +13,21 @@ from __future__ import annotations
 
 from google.adk.agents import Agent
 from google.adk.tools import FunctionTool
-from config import settings
-from schemas import EntityExtractionResult
-from tools.entity_tools import (
-    check_restricted_or_internal_codename,
-    resolve_ticker_and_status,
-)
+
+try:
+    from app.config import settings
+    from app.schemas import EntityExtractionResult
+    from app.tools.entity_tools import (
+        check_restricted_or_internal_codename,
+        resolve_ticker_and_status,
+    )
+except ImportError:
+    from config import settings
+    from schemas import EntityExtractionResult
+    from tools.entity_tools import (
+        check_restricted_or_internal_codename,
+        resolve_ticker_and_status,
+    )
 
 ENTITIES_AGENT_INSTRUCTION = """You are SA1: Entities Extraction Specialist, a specialized sub-agent tool for the MNPI Fact Checker.
 

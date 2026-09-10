@@ -22,9 +22,15 @@ from __future__ import annotations
 
 from typing import Optional
 from google.adk.agents import Agent
-from config import settings
-from schemas import ArbiterVerdict
-from tools.audit_tools import record_document_alignment_in_bigquery
+
+try:
+    from app.config import settings
+    from app.schemas import ArbiterVerdict
+    from app.tools.audit_tools import record_document_alignment_in_bigquery
+except ImportError:
+    from config import settings
+    from schemas import ArbiterVerdict
+    from tools.audit_tools import record_document_alignment_in_bigquery
 
 ARBITER_SYSTEM_PROMPT = """You are the MPNI Agent Arbiter, the definitive Decision Authority for Material Non-Public Information compliance.
 
@@ -89,3 +95,99 @@ def create_arbiter_agent(model: Optional[str] = None) -> Agent:
         tools=[record_document_alignment_in_bigquery],
         output_schema=ArbiterVerdict,
     )
+
+
+import logging
+import time
+from typing import Any, Dict
+
+logger = logging.getLogger("mnpi_decision_authority_runtime")
+
+
+class MNPIDecisionAuthorityRuntime:
+    """Vertex AI Reasoning Engine Runtime for Agent 2 (MNPI Decision Authority)."""
+
+    agent_framework: str = "google-adk"
+
+    def __init__(
+        self,
+        project_id: str = "green-carrier-500109-k2",
+        location: str = "us",
+        model: str = "gemini-3.8-flash",
+    ):
+        self.project_id = project_id
+        self.location = location
+        self.model = model
+        self.agent_framework = "google-adk"
+
+    def set_up(self):
+        """Initializes runtime environment upon Vertex AI container startup."""
+        logger.info(
+            f"Initialized MNPIDecisionAuthorityRuntime for project={self.project_id}, "
+            f"location={self.location}, model={self.model}"
+        )
+
+    def query(
+        self,
+        text: Optional[str] = None,
+        dossier: Optional[Dict[str, Any]] = None,
+        prompt: Optional[str] = None,
+        input: Optional[str] = None,
+        document_name: str = "compliance_document",
+        channel: str = "api",
+        log_to_bq: bool = True,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        document_text = text or prompt or input or kwargs.get("message") or kwargs.get("content") or ""
+        try:
+            from app.schemas import FactCheckingDossier
+            from app.workflow import get_genai_client, run_live_arbiter, run_offline_arbiter
+            from app.audit_logger import log_document_alignment_to_bq
+        except ImportError:
+            from schemas import FactCheckingDossier
+            from workflow import get_genai_client, run_live_arbiter, run_offline_arbiter
+            from audit_logger import log_document_alignment_to_bq
+
+        if dossier is None:
+            logger.info("No dossier provided to Agent 2; invoking Agent 1 (MNPIFactCheckerRuntime) first...")
+            try:
+                from app.agents.fact_checker import MNPIFactCheckerRuntime
+            except ImportError:
+                from agents.fact_checker.runtime import MNPIFactCheckerRuntime
+            fc_agent = MNPIFactCheckerRuntime(
+                project_id=self.project_id,
+                location=self.location,
+                model=self.model,
+            )
+            dossier = fc_agent.query(text=document_text)
+
+        start_t = time.perf_counter()
+        parsed_dossier = FactCheckingDossier.model_validate(dossier)
+
+        client = get_genai_client()
+        if client:
+            try:
+                verdict = run_live_arbiter(client, document_text, parsed_dossier)
+            except Exception as err:
+                logger.warning(f"Live Arbiter execution notice ({err}); using deterministic arbiter fallback.")
+                verdict = run_offline_arbiter(parsed_dossier)
+        else:
+            verdict = run_offline_arbiter(parsed_dossier)
+
+        latency_ms = round((time.perf_counter() - start_t) * 1000, 2)
+
+        if log_to_bq:
+            try:
+                log_document_alignment_to_bq(
+                    document_name=document_name,
+                    verdict=verdict,
+                    channel=channel,
+                    latency_ms=latency_ms,
+                    raw_text=document_text,
+                    dossier=parsed_dossier,
+                )
+            except Exception as e:
+                logger.warning(f"BigQuery audit log notice: {e}")
+
+        return verdict.model_dump()
+

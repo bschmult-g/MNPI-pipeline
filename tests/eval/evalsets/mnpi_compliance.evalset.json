@@ -1,0 +1,99 @@
+{
+  "eval_set_id": "mnpi_compliance_eval",
+  "name": "MNPI Compliance Benchmark Evaluation Set",
+  "description": "Standardized evaluation set testing MNPI Fact Checker and Decision Authority across 4 legal compliance scenarios.",
+  "eval_cases": [
+    {
+      "eval_id": "case_1_critical_leak",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Don't share this yet, but we are finalizing Project Titan to acquire TechCo for $2.4B next Tuesday ahead of the upcoming Q3 earnings call."
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "mnpi_compliance_agent",
+        "user_id": "compliance_evaluator",
+        "state": {
+          "expected_verdict": "MNPI_CONFIRMED",
+          "expected_risk": "CRITICAL",
+          "expected_action": "BLOCK_COMMUNICATION"
+        }
+      }
+    },
+    {
+      "eval_id": "case_2_public_news",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Target publicly reported Q2 financial results on August 21, confirming 2.7% comparable sales growth and reaffirming full-year guidance."
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "mnpi_compliance_agent",
+        "user_id": "compliance_evaluator",
+        "state": {
+          "expected_verdict": "CLEARED",
+          "expected_risk": "LOW",
+          "expected_action": "APPROVE_RELEASE"
+        }
+      }
+    },
+    {
+      "eval_id": "case_3_unannounced_roadmap_slip",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "The executive committee decided that the roadmap feature release is slipping by two quarters to allow for architectural redesign."
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "mnpi_compliance_agent",
+        "user_id": "compliance_evaluator",
+        "state": {
+          "expected_verdict": "POTENTIAL_MNPI",
+          "expected_risk": "HIGH",
+          "expected_action": "ESCALATE_TO_COMPLIANCE"
+        }
+      }
+    },
+    {
+      "eval_id": "case_4_benign_routine_memo",
+      "conversation": [
+        {
+          "user_content": {
+            "parts": [
+              {
+                "text": "Reminder to all team members: the quarterly facilities maintenance will take place this Saturday from 9 AM to 1 PM."
+              }
+            ]
+          }
+        }
+      ],
+      "session_input": {
+        "app_name": "mnpi_compliance_agent",
+        "user_id": "compliance_evaluator",
+        "state": {
+          "expected_verdict": "PUBLIC_NON_MATERIAL",
+          "expected_risk": "LOW",
+          "expected_action": "APPROVE_RELEASE"
+        }
+      }
+    }
+  ]
+}
